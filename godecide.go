@@ -30,7 +30,7 @@ func main() {
 	if len(os.Args) < 3 {
 		Fpf(os.Stderr, "usage: %s {src} {dst}\n", os.Args[0])
 		Fpf(os.Stderr, "- src is either (stdin|example) or a filename\n")
-		Fpf(os.Stderr, "- dst is either (stdout|xdot) or a filename\n")
+		Fpf(os.Stderr, "- dst is either (stdout|xdot|yaml) or a filename\n")
 		os.Exit(1)
 	}
 	//  get subcommand
@@ -81,6 +81,8 @@ func main() {
 	switch dst {
 	case "stdout":
 		fmt.Print(dotbuf.String())
+	case "yaml":
+		fmt.Print(string(buf))
 	case "xdot":
 		tmpfile, err := ioutil.TempFile("/tmp", "godecide.*.dot")
 		Ck(err)
