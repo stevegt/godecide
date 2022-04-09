@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-//go:embed example.yaml
+//go:embed examples/example.yaml
 var fs embed.FS
 
 var now = time.Now()
@@ -365,7 +365,7 @@ func (p *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
 
 func Example() (buf []byte, err error) {
 	defer Return(&err)
-	buf, err = fs.ReadFile("example.yaml")
+	buf, err = fs.ReadFile("examples/example.yaml")
 	Ck(err)
 	return
 }
