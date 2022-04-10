@@ -11,10 +11,13 @@ import (
 	"path"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/goccy/go-graphviz"
 	"github.com/goccy/go-graphviz/cgraph"
+	"github.com/soudy/mathcat"
 	. "github.com/stevegt/goadapt"
 	"github.com/stevegt/goxirr"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -57,7 +60,7 @@ func main() {
 	roots, err := FromYAML(buf)
 	Ck(err)
 
-	// sum up Cost, Yield, Duration
+	// sum up Cash and Duration
 	for _, root := range roots {
 		root.Forward(nil)
 	}
@@ -119,67 +122,41 @@ func main() {
 }
 
 type Node struct {
-	Desc  string
-	Cost  float64
-	Yield float64
-	Days  float64
-	Paths Paths `yaml:",omitempty"`
+	Desc    string
+	Cash    string
+	Days    string
+	Repeat  string
+	AtStart bool
+	Paths   Paths `yaml:",omitempty"`
 }
 
 type Paths map[string]float64
 
 type Nodes map[string]Node
 
-/*
-func (nodes Nodes) Names() (names []string) {
-	names := make([]string, len(nodes))
-	i := 0
-	for name := range nodes {
-		names[i] = name
-		i++
-	}
-}
-
-func (nodes Nodes) Roots() (roots *List) {
-	roots := list.New()
-	for _, name := range nodes.Names() {
-		roots.PushBack(name)
-	}
-	e := roots.Front()
-	for parentname
-		parentname := e.Value()
-		parentnode := nodes[parentname]
-		for childname, _ := range parentnode.Paths {
-			if rootname == childname {
-				// parent is closer to root
-				rootname = parentname
-			}
-		}
-	}
-	return
-}
-*/
-
 type Ast struct {
 	Name             string
 	Desc             string
-	Cost             float64
-	Yield            float64
-	Duration         time.Duration
+	PeriodCash       float64
+	PeriodDuration   time.Duration
+	Repeat           int64
 	Prob             float64
-	TotalCost        float64
-	TotalYield       float64
-	TotalDuration    time.Duration
-	ProbableCost     float64
-	ProbableYield    float64
-	ProbableDuration time.Duration
-	Transactions     goxirr.Transactions
+	AtStart          bool
+	NodeCash         float64
+	NodeDuration     time.Duration
+	NetCash          float64
+	NetDuration      time.Duration
+	DurationToDate   time.Duration
+	ExpectedCash     float64
+	ExpectedDuration time.Duration
 	Start            time.Time
 	End              time.Time
-	Irr              float64
-	ProbableIrr      float64
-	Parent           *Ast
-	Children         map[string]*Ast
+	Transactions     goxirr.Transactions
+	// Irr              float64
+	Return     float64
+	NetPerYear float64
+	Parent     *Ast
+	Children   map[string]*Ast
 }
 
 func FromYAML(buf []byte) (roots []*Ast, err error) {
@@ -210,17 +187,64 @@ func (nodes Nodes) RootNodes() (rootnodes Nodes) {
 	return
 }
 
-func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) {
-	node := nodes[name]
-	root = &Ast{
-		Name:     name,
-		Desc:     node.Desc,
-		Cost:     node.Cost,
-		Yield:    node.Yield,
-		Duration: time.Duration(node.Days) * 24 * time.Hour,
-		Prob:     prob,
-		Parent:   parent,
+func formatArgs(args ...interface{}) (msg string) {
+	if len(args) == 1 {
+		msg = fmt.Sprintf("%v", args[0])
 	}
+	if len(args) > 1 {
+		msg = fmt.Sprintf(args[0].(string), args[1:]...)
+	}
+	return
+}
+
+func dieif(cond bool, args ...interface{}) {
+	if cond == false {
+		return
+	}
+	var msg string
+	if len(args) == 1 {
+		msg = fmt.Sprintf("%v", args[0])
+	}
+	if len(args) > 1 {
+		msg = fmt.Sprintf(args[0].(string), args[1:]...)
+	}
+	fmt.Fprintf(os.Stderr, "%v\n", msg)
+	os.Exit(1)
+}
+
+func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) {
+	node, ok := nodes[name] // XXX this should blow up when child is missing
+	dieif(!ok, "missing node: %s", name)
+
+	cashrat, err := mathcat.Eval(node.Cash)
+	dieif(err != nil, err)
+	cash, _ := cashrat.Float64()
+
+	daysrat, err := mathcat.Eval(node.Days)
+	dieif(err != nil, err)
+	days, _ := daysrat.Float64()
+
+	repeatrat, err := mathcat.Eval(node.Repeat)
+	dieif(err != nil, err)
+	dieif(!(repeatrat.IsInt() && repeatrat.Denom().Int64() == 1), "repeat must evaluate to int: %s", node)
+	repeat := repeatrat.Num().Int64()
+	repeat = int64(math.Max(1, float64(repeat)))
+
+	root = &Ast{
+		Name:           name,
+		Desc:           node.Desc,
+		PeriodCash:     cash,
+		PeriodDuration: time.Duration(days) * 24 * time.Hour,
+		Repeat:         repeat,
+		AtStart:        node.AtStart,
+		Prob:           prob,
+		Parent:         parent,
+	}
+	// XXX NPV
+	root.NodeCash = root.PeriodCash * float64(root.Repeat)
+
+	root.NodeDuration = root.PeriodDuration * time.Duration(root.Repeat)
+
 	root.Children = make(map[string]*Ast)
 	for childname, prob := range node.Paths {
 		root.Children[childname] = nodes.FromNode(childname, prob, root)
@@ -228,62 +252,15 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 	return
 }
 
-/*
-func FromNodes(nodes Nodes) (root *Ast) {
-	// start with a tentative top AST node
-	root = &Ast{Name: "top"}
-	// iterate over all input nodes
-	for name, node := range nodes {
-		// create ast node
-
-		// recurse through children
-
-		for childname, prob := range parentnode.Paths {
-
-			_, ok := roots[childname]
-			if ok {
-				delete(roots, childname)
-				continue
-			}
-
-			if rootname == childname {
-				// parent is closer to root
-				rootname = parentname
-			}
-		}
-	}
-	return
-}
-*/
-
-// sum up Cost, Yield, Duration from root to leaves
+// sum up Cash, Duration from root to leaves
 func (this *Ast) Forward(parent *Ast) {
 	if parent != nil {
-		this.TotalCost = parent.TotalCost
-		this.TotalYield = parent.TotalYield
-		this.TotalDuration = parent.TotalDuration
-		this.Transactions = parent.Transactions
+		this.DurationToDate = parent.DurationToDate
 	}
 
-	this.Start = now.Add(this.TotalDuration)
-	this.TotalCost += this.Cost
-	this.TotalYield += this.Yield
-	this.TotalDuration += this.Duration
-	this.End = now.Add(this.TotalDuration)
-
-	// assume costs are up front and yields are at end of duration
-	cost := goxirr.Transaction{
-		Date: this.Start,
-		Cash: -this.Cost,
-	}
-	this.Transactions = append(this.Transactions, cost)
-	yield := goxirr.Transaction{
-		Date: this.End,
-		Cash: this.Yield,
-	}
-	this.Transactions = append(this.Transactions, yield)
-	// Pf("%#v\n", this.Transactions)
-	this.Irr = goxirr.Xirr(this.Transactions)
+	this.Start = now.Add(this.DurationToDate)
+	this.DurationToDate += this.NodeDuration
+	this.End = now.Add(this.DurationToDate)
 
 	for _, child := range this.Children {
 		child.Forward(this)
@@ -291,32 +268,65 @@ func (this *Ast) Forward(parent *Ast) {
 }
 
 // calculate probable values
-func (parent *Ast) Backward() {
-	if len(parent.Children) == 0 {
-		// leaf
-		parent.ProbableCost = parent.TotalCost
-		parent.ProbableYield = parent.TotalYield
-		parent.ProbableDuration = parent.TotalDuration
-		parent.ProbableIrr = parent.Irr
-	} else {
+func (this *Ast) Backward() {
+	if len(this.Children) > 0 {
 		totalProb := 0.0
-		for _, child := range parent.Children {
+		for _, child := range this.Children {
 			totalProb += child.Prob
 		}
 		if math.Abs(totalProb-1) > .001 {
-			fmt.Fprintf(os.Stderr, "normalizing path probabilities: %s\n", parent.Name)
-			for _, child := range parent.Children {
+			fmt.Fprintf(os.Stderr, "normalizing path probabilities: %s\n", this.Name)
+			for _, child := range this.Children {
 				child.Prob /= totalProb
 			}
 		}
-		for _, child := range parent.Children {
+		for _, child := range this.Children {
 			child.Backward()
-			parent.ProbableCost += child.ProbableCost * child.Prob
-			parent.ProbableYield += child.ProbableYield * child.Prob
-			parent.ProbableDuration += child.ProbableDuration * time.Duration(child.Prob)
-			parent.ProbableIrr += child.ProbableIrr * child.Prob
+			this.ExpectedCash += child.NetCash * child.Prob
+			this.ExpectedDuration += time.Duration(float64(child.NetDuration) * child.Prob)
 		}
 	}
+	this.NetCash = this.NodeCash + this.ExpectedCash
+	this.NetDuration = this.NodeDuration + this.ExpectedDuration
+
+	/*
+		var t int64
+		for t = 1; t <= this.Repeat; t++ {
+			var date time.Time
+			if this.AtStart {
+				date = this.Start.Add(time.Duration(t-1) * this.PeriodDuration)
+			} else {
+				date = this.Start.Add(time.Duration(t) * this.PeriodDuration)
+			}
+			cash := goxirr.Transaction{
+				Date: date,
+				Cash: this.PeriodCash,
+			}
+			this.Transactions = append(this.Transactions, cash)
+		}
+		expect := goxirr.Transaction{
+			Date: this.Start.Add(this.ExpectedDuration),
+			Cash: this.ExpectedCash,
+		}
+		this.Transactions = append(this.Transactions, expect)
+		this.Irr = goxirr.Xirr(this.Transactions)
+		Pf("%s %.2f\n", this.Name, this.Irr)
+		for _, t := range this.Transactions {
+			Pf("%v %v\n", t.Date, t.Cash)
+		}
+		Pl()
+	*/
+
+	if this.NodeCash < 0 && this.ExpectedCash > 0 {
+		years := float64(this.NetDuration / (365 * 24 * time.Hour))
+		this.Return = (math.Pow(this.ExpectedCash/(-1*this.NodeCash), (1/years)) - 1) * 100
+	} else {
+		this.Return = math.NaN()
+	}
+
+	years := float64(this.NetDuration / (365 * 24 * time.Hour))
+	this.NetPerYear = this.NetCash / years
+
 }
 
 func Dot(roots []*Ast) (buf bytes.Buffer, err error) {
@@ -340,20 +350,34 @@ func Dot(roots []*Ast) (buf bytes.Buffer, err error) {
 	return
 }
 
+func form(n float64) string {
+	res := humanize.Comma(int64(n))
+	return res
+}
+
+func days(d time.Duration) string {
+	return Spf("%.0f days", float64(d)/float64(24*time.Hour))
+}
+
+// Dot adds a record-shaped node to the graphviz graph for Ast node p
+// (parent), and adds a graphviz edge from p to each of the children
+// of p.
 func (p *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 	gvparent, err = graph.CreateNode(Spf("%p", p))
 	gvparent.SetShape("record")
 	Ck(err)
-	rowheads := "|cost|yield|irr"
-	this := Spf("this | %.0f | %.0f | ", p.Cost, p.Yield)
+	rowheads := "|cash|duration|return"
+	this := Spf("node | %s | %s |", form(p.NodeCash), days(p.NodeDuration))
 	dates := Spf("%s - %s", p.Start.Format("2006-01-02"), p.End.Format("2006-01-02"))
-	totals := Spf("to date | %.0f | %.0f | %.1f", p.TotalCost, p.TotalYield, p.Irr)
-	probs := Spf("future | %.0f | %.0f |  %.1f", p.ProbableCost, p.ProbableYield, p.ProbableIrr)
-	label := Spf("%s | %s | %s | { {%s} | {%s} | {%s} | {%s}}", p.Name, p.Desc, dates, rowheads, this, totals, probs)
+	expect := Spf("expected | %s | %s | ", form(p.ExpectedCash), days(p.ExpectedDuration))
+	net := Spf("net | %s | %s | %.1f%%", form(p.NetCash), days(p.NetDuration), p.Return)
+	label := Spf("%s | %s | %s | { {%s} | {%s} | {%s} | {%s}}", p.Name, p.Desc, dates, rowheads, this, expect, net)
 
 	gvparent.SetLabel(label)
 	for _, child := range p.Children {
+		// XXX should first verify that child exists in node list so
+		// we don't silently create a zero-filled node
 		gvchild, err := child.Dot(graph)
 		Ck(err)
 		edge, err := graph.CreateEdge("", gvparent, gvchild)

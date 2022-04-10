@@ -1,38 +1,114 @@
-apple:
-  desc: oidsaknfdsj lkkljlkj jk
-  cost: 100
-  yield: 101
-  days: 7
-  paths:
-    bar: 0.3
-    foo: 0.7
+# example from https://hbr.org/1964/07/decision-trees-for-decision-making
 
-bar:
-  desc: oifdsaukj kjfdsauew hjkh fhjakjh d7adskfh
-  cost: 100
-  yield: 200
-  days: 73
+dp1:
+  desc: decision point 1
+  cash: 0
+  days: 0
+  repeat: 0
   paths:
-    bing: .8
-    baz: .2
+    big: 0.5
+    small: 0.5
 
-foo:
-  desc: lkdsaj falskdjf dsal
-  cost: 1000
-  yield: 1023
-  days: 23
+big:
+  desc: build big plant
+  cash: -3000000
+  days: 0
   paths:
-    bing: .1
-    baz: .6
+    big-highavg: 0.6
+    big-highinit: 0.1
+    big-lowavg: 0.3
 
-bing:
-  desc: uewoslkfd lkj fd
-  cost: 3200
-  yield: 3278
-  days: 36
-baz:
-  desc: oiwuekjnvcxkhh hdskjh s
-  cost: 800
-  yield: 900
-  days: 76
+big-highavg:
+  desc: high average demand
+  cash: 1000000
+  days: 365
+  repeat: 10
+
+big-highinit:
+  desc: high initial demand
+  cash: 1000000
+  days: 365
+  repeat: 2
+  paths: 
+    lowsub: 1
+
+lowsub:
+  desc: low subsequent demand
+  cash: 100000
+  days: 365
+  repeat: 8
+
+big-lowavg:
+  desc: low average demand
+  cash: 100000
+  days: 365
+  repeat: 10
+
+small:
+  desc: build small plant
+  cash: -1300000
+  days: 0
+  paths:
+    small-highinit: 0.7
+    small-lowinit: 0.3
+
+small-highinit:
+  desc: high initial demand (2 yrs)
+  cash: 450000
+  days: 365
+  repeat: 2
+  paths:
+    dp2: 1
+
+dp2:
+  desc: decision point 2
+  paths:
+    expand: 1
+    nochange: 0
+
+small-lowinit:
+  desc: low demand 
+  cash: 400000
+  days: 365
+  repeat: 10
+
+expand:
+  desc: expand plant
+  cash: -2200000
+  days: 0
+  paths:
+    expand-highavg: .86
+    expand-lowavg: .14
+
+expand-highavg:
+  desc: high average demand
+  cash: 700000
+  days: 365
+  repeat: 8
+
+expand-lowavg:
+  desc: low average demand
+  cash: 50000
+  days: 365
+  repeat: 8
+
+nochange:
+  desc: no change in plant
+  cash: 0
+  days: 0
+  paths:
+    nochange-highavg: .86
+    nochange-lowavg: .14
+
+nochange-highavg:
+  desc: high average demand (shared with competition)
+  cash: 300000
+  days: 365
+  repeat: 8
+
+nochange-lowavg:
+  desc: low average demand (no competition)
+  cash: 400000
+  days: 365
+  repeat: 8
 
