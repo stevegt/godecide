@@ -5,6 +5,8 @@ dp1:
   cash: 0
   days: 0
   repeat: 0
+  finrate: .1
+  rerate: .1
   paths:
     big: 0.5
     small: 0.5

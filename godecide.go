@@ -126,7 +126,8 @@ type Node struct {
 	Cash    string
 	Days    string
 	Repeat  string
-	AtStart bool
+	FinRate float64
+	ReRate  float64
 	Paths   Paths `yaml:",omitempty"`
 }
 
@@ -134,28 +135,27 @@ type Paths map[string]float64
 
 type Nodes map[string]Node
 
+type Stats struct {
+	Duration time.Duration
+	Cash     float64
+	Npv      float64
+	Mirr     float64
+}
+
 type Ast struct {
-	Name           string
-	Desc           string
-	PeriodCash     float64
-	PeriodDuration time.Duration
-	Repeat         int
-	Prob           float64
-	// AtStart          bool
-	NodeCash         float64
-	NodeDuration     time.Duration
-	NetCash          float64
-	NetDuration      time.Duration
-	DurationToDate   time.Duration
-	ExpectedCash     float64
-	ExpectedDuration time.Duration
-	Start            time.Time
-	End              time.Time
-	Timeline         fin.Timeline
-	Mirr             float64
-	Npv              float64
-	// Return     float64
-	// NetPerYear float64
+	Name     string
+	Desc     string
+	Repeat   int
+	Prob     float64
+	FinRate  float64
+	ReRate   float64
+	Period   Stats
+	Node     Stats
+	Path     Stats
+	Expected Stats
+	Start    time.Time
+	End      time.Time
+	Timeline fin.Timeline
 	Parent   *Ast
 	Children map[string]*Ast
 }
@@ -232,19 +232,20 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 	repeat = int(math.Max(1, float64(repeat)))
 
 	root = &Ast{
-		Name:           name,
-		Desc:           node.Desc,
-		PeriodCash:     cash,
-		PeriodDuration: time.Duration(days) * 24 * time.Hour,
-		Repeat:         repeat,
-		// AtStart:        node.AtStart,
-		Prob:   prob,
-		Parent: parent,
+		Name: name,
+		Desc: node.Desc,
+		Period: Stats{
+			Cash:     cash,
+			Duration: time.Duration(days) * 24 * time.Hour,
+		},
+		Repeat:  repeat,
+		FinRate: node.FinRate,
+		ReRate:  node.ReRate,
+		Prob:    prob,
+		Parent:  parent,
 	}
-	// XXX NPV
-	root.NodeCash = root.PeriodCash * float64(root.Repeat)
-
-	root.NodeDuration = root.PeriodDuration * time.Duration(root.Repeat)
+	root.Node.Cash = root.Period.Cash * float64(root.Repeat)
+	root.Node.Duration = root.Period.Duration * time.Duration(root.Repeat)
 
 	root.Children = make(map[string]*Ast)
 	for childname, prob := range node.Paths {
@@ -253,50 +254,52 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 	return
 }
 
-// sum up Cash, Duration from root to leaves
+// calculate .Path.*
 func (this *Ast) Forward(parent *Ast) {
 	if parent != nil {
 		this.Timeline = parent.Timeline
-		this.DurationToDate = parent.DurationToDate
+		this.Path.Cash = parent.Path.Cash
+		this.Path.Duration = parent.Path.Duration
 	}
 
-	this.Start = now.Add(this.DurationToDate)
-	this.DurationToDate += this.NodeDuration
-	this.End = now.Add(this.DurationToDate)
+	this.Start = now.Add(this.Path.Duration)
+	this.Path.Cash += this.Node.Cash
+	this.Path.Duration += this.Node.Duration
+	this.End = now.Add(this.Path.Duration)
 
+	if this.FinRate != 0 {
+		this.Timeline.SetFinRate(this.Start, this.FinRate)
+	}
+	if this.ReRate != 0 {
+		this.Timeline.SetReRate(this.Start, this.ReRate)
+	}
 	for i := 1; i <= this.Repeat; i++ {
 		var date time.Time
-		// assume outflows are at beginning of each period, inflows at end
-		// XXX simplify
-		if this.PeriodCash < 0 {
-			date = this.Start.Add(time.Duration(i-1) * this.PeriodDuration)
-		} else {
-			date = this.Start.Add(time.Duration(i) * this.PeriodDuration)
-		}
-		this.Timeline.Event(date, this.PeriodCash)
-	}
-	if this.Name == "expand-lowavg" {
-		// os.Setenv("DEBUG", "1")
+		date = this.Start.Add(time.Duration(i) * this.Period.Duration)
+		this.Timeline.Event(date, this.Period.Cash)
 	}
 	this.Timeline.Recalc()
+	this.Path.Npv = this.Timeline.Npv()
+	this.Path.Mirr = this.Timeline.Mirr()
 
-	Pl(this.Name)
-	for _, t := range this.Timeline.Events() {
-		Pf("%v %v\n", t.Date, t.Cash)
-	}
-
-	this.Mirr = this.Timeline.Mirr()
-	Pf("%.2f\n", this.Mirr)
-	Pl()
+	/*
+		Pl(this.Name)
+		for _, t := range this.Timeline.Events() {
+			Pf("%v %v\n", t.Date, t.Cash)
+		}
+		Pf("%.2f\n", this.Path.Mirr)
+		Pl()
+	*/
 
 	for _, child := range this.Children {
 		child.Forward(this)
 	}
 }
 
-// calculate probable values
+// calculate .Expected.*
 func (this *Ast) Backward() {
 	if len(this.Children) > 0 {
+		// root or inner node
 		totalProb := 0.0
 		for _, child := range this.Children {
 			totalProb += child.Prob
@@ -309,25 +312,18 @@ func (this *Ast) Backward() {
 		}
 		for _, child := range this.Children {
 			child.Backward()
-			this.ExpectedCash += child.NetCash * child.Prob
-			this.ExpectedDuration += time.Duration(float64(child.NetDuration) * child.Prob)
+			this.Expected.Cash += child.Expected.Cash * child.Prob
+			this.Expected.Duration += time.Duration(float64(child.Expected.Duration) * child.Prob)
+			this.Expected.Npv += child.Expected.Npv * child.Prob
+			this.Expected.Mirr += child.Expected.Mirr * child.Prob
 		}
+	} else {
+		// leaf -- we fold the path stuff back into expected here, and only here
+		this.Expected.Cash = this.Path.Cash
+		this.Expected.Duration = this.Path.Duration
+		this.Expected.Npv = this.Path.Npv
+		this.Expected.Mirr = this.Path.Mirr
 	}
-	this.NetCash = this.NodeCash + this.ExpectedCash
-	this.NetDuration = this.NodeDuration + this.ExpectedDuration
-
-	/*
-		if this.NodeCash < 0 && this.ExpectedCash > 0 {
-			years := float64(this.NetDuration / (365 * 24 * time.Hour))
-			this.Return = (math.Pow(this.ExpectedCash/(-1*this.NodeCash), (1/years)) - 1) * 100
-		} else {
-			this.Return = math.NaN()
-		}
-
-		years := float64(this.NetDuration / (365 * 24 * time.Hour))
-		this.NetPerYear = this.NetCash / years
-	*/
-
 }
 
 func Dot(roots []*Ast) (buf bytes.Buffer, err error) {
@@ -363,20 +359,29 @@ func days(d time.Duration) string {
 // Dot adds a record-shaped node to the graphviz graph for Ast node p
 // (parent), and adds a graphviz edge from p to each of the children
 // of p.
-func (p *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
+func (a *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
-	gvparent, err = graph.CreateNode(Spf("%p", p))
+	gvparent, err = graph.CreateNode(Spf("%p", a))
 	gvparent.SetShape("record")
 	Ck(err)
-	rowheads := "|cash|duration|irr"
-	this := Spf("node | %s | %s |%.1f%%", form(p.NodeCash), days(p.NodeDuration), p.Mirr)
-	dates := Spf("%s - %s", p.Start.Format("2006-01-02"), p.End.Format("2006-01-02"))
-	expect := Spf("expected | %s | %s | ", form(p.ExpectedCash), days(p.ExpectedDuration))
-	net := Spf("net | %s | %s | ", form(p.NetCash), days(p.NetDuration))
-	label := Spf("%s | %s | %s | { {%s} | {%s} | {%s} | {%s}}", p.Name, p.Desc, dates, rowheads, this, expect, net)
+
+	dates := Spf("%s - %s", a.Start.Format("2006-01-02"), a.End.Format("2006-01-02"))
+	// row headings
+	head := "             |cash|duration|npv    |mirr  "
+
+	// columns
+	n := a.Node
+	p := a.Path
+	e := a.Expected
+	node := Spf("node     | %s | %s     | %s    |      ", form(n.Cash), days(n.Duration), form(n.Npv))
+	path := Spf("path     | %s | %s     | %s    |%.1f%% ", form(p.Cash), days(p.Duration), form(p.Npv), p.Mirr)
+	expe := Spf("expected | %s | %s     | %s    |%.1f%% ", form(e.Cash), days(e.Duration), form(e.Npv), e.Mirr)
+
+	// put it all together
+	label := Spf("%s | %s | %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
 
 	gvparent.SetLabel(label)
-	for _, child := range p.Children {
+	for _, child := range a.Children {
 		// XXX should first verify that child exists in node list so
 		// we don't silently create a zero-filled node
 		gvchild, err := child.Dot(graph)
