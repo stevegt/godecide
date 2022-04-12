@@ -16,7 +16,7 @@ import (
 	"github.com/goccy/go-graphviz/cgraph"
 	"github.com/soudy/mathcat"
 	. "github.com/stevegt/goadapt"
-	"github.com/stevegt/goxirr"
+	"github.com/stevegt/godecide/fin"
 
 	"gopkg.in/yaml.v2"
 )
@@ -135,13 +135,13 @@ type Paths map[string]float64
 type Nodes map[string]Node
 
 type Ast struct {
-	Name             string
-	Desc             string
-	PeriodCash       float64
-	PeriodDuration   time.Duration
-	Repeat           int64
-	Prob             float64
-	AtStart          bool
+	Name           string
+	Desc           string
+	PeriodCash     float64
+	PeriodDuration time.Duration
+	Repeat         int
+	Prob           float64
+	// AtStart          bool
 	NodeCash         float64
 	NodeDuration     time.Duration
 	NetCash          float64
@@ -151,12 +151,13 @@ type Ast struct {
 	ExpectedDuration time.Duration
 	Start            time.Time
 	End              time.Time
-	Transactions     goxirr.Transactions
-	// Irr              float64
-	Return     float64
-	NetPerYear float64
-	Parent     *Ast
-	Children   map[string]*Ast
+	Timeline         fin.Timeline
+	Mirr             float64
+	Npv              float64
+	// Return     float64
+	// NetPerYear float64
+	Parent   *Ast
+	Children map[string]*Ast
 }
 
 func FromYAML(buf []byte) (roots []*Ast, err error) {
@@ -213,7 +214,7 @@ func dieif(cond bool, args ...interface{}) {
 }
 
 func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) {
-	node, ok := nodes[name] // XXX this should blow up when child is missing
+	node, ok := nodes[name]
 	dieif(!ok, "missing node: %s", name)
 
 	cashrat, err := mathcat.Eval(node.Cash)
@@ -227,8 +228,8 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 	repeatrat, err := mathcat.Eval(node.Repeat)
 	dieif(err != nil, err)
 	dieif(!(repeatrat.IsInt() && repeatrat.Denom().Int64() == 1), "repeat must evaluate to int: %s", node)
-	repeat := repeatrat.Num().Int64()
-	repeat = int64(math.Max(1, float64(repeat)))
+	repeat := int(repeatrat.Num().Int64())
+	repeat = int(math.Max(1, float64(repeat)))
 
 	root = &Ast{
 		Name:           name,
@@ -236,9 +237,9 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 		PeriodCash:     cash,
 		PeriodDuration: time.Duration(days) * 24 * time.Hour,
 		Repeat:         repeat,
-		AtStart:        node.AtStart,
-		Prob:           prob,
-		Parent:         parent,
+		// AtStart:        node.AtStart,
+		Prob:   prob,
+		Parent: parent,
 	}
 	// XXX NPV
 	root.NodeCash = root.PeriodCash * float64(root.Repeat)
@@ -255,12 +256,38 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 // sum up Cash, Duration from root to leaves
 func (this *Ast) Forward(parent *Ast) {
 	if parent != nil {
+		this.Timeline = parent.Timeline
 		this.DurationToDate = parent.DurationToDate
 	}
 
 	this.Start = now.Add(this.DurationToDate)
 	this.DurationToDate += this.NodeDuration
 	this.End = now.Add(this.DurationToDate)
+
+	for i := 1; i <= this.Repeat; i++ {
+		var date time.Time
+		// assume outflows are at beginning of each period, inflows at end
+		// XXX simplify
+		if this.PeriodCash < 0 {
+			date = this.Start.Add(time.Duration(i-1) * this.PeriodDuration)
+		} else {
+			date = this.Start.Add(time.Duration(i) * this.PeriodDuration)
+		}
+		this.Timeline.Event(date, this.PeriodCash)
+	}
+	if this.Name == "expand-lowavg" {
+		// os.Setenv("DEBUG", "1")
+	}
+	this.Timeline.Recalc()
+
+	Pl(this.Name)
+	for _, t := range this.Timeline.Events() {
+		Pf("%v %v\n", t.Date, t.Cash)
+	}
+
+	this.Mirr = this.Timeline.Mirr()
+	Pf("%.2f\n", this.Mirr)
+	Pl()
 
 	for _, child := range this.Children {
 		child.Forward(this)
@@ -290,42 +317,16 @@ func (this *Ast) Backward() {
 	this.NetDuration = this.NodeDuration + this.ExpectedDuration
 
 	/*
-		var t int64
-		for t = 1; t <= this.Repeat; t++ {
-			var date time.Time
-			if this.AtStart {
-				date = this.Start.Add(time.Duration(t-1) * this.PeriodDuration)
-			} else {
-				date = this.Start.Add(time.Duration(t) * this.PeriodDuration)
-			}
-			cash := goxirr.Transaction{
-				Date: date,
-				Cash: this.PeriodCash,
-			}
-			this.Transactions = append(this.Transactions, cash)
+		if this.NodeCash < 0 && this.ExpectedCash > 0 {
+			years := float64(this.NetDuration / (365 * 24 * time.Hour))
+			this.Return = (math.Pow(this.ExpectedCash/(-1*this.NodeCash), (1/years)) - 1) * 100
+		} else {
+			this.Return = math.NaN()
 		}
-		expect := goxirr.Transaction{
-			Date: this.Start.Add(this.ExpectedDuration),
-			Cash: this.ExpectedCash,
-		}
-		this.Transactions = append(this.Transactions, expect)
-		this.Irr = goxirr.Xirr(this.Transactions)
-		Pf("%s %.2f\n", this.Name, this.Irr)
-		for _, t := range this.Transactions {
-			Pf("%v %v\n", t.Date, t.Cash)
-		}
-		Pl()
-	*/
 
-	if this.NodeCash < 0 && this.ExpectedCash > 0 {
 		years := float64(this.NetDuration / (365 * 24 * time.Hour))
-		this.Return = (math.Pow(this.ExpectedCash/(-1*this.NodeCash), (1/years)) - 1) * 100
-	} else {
-		this.Return = math.NaN()
-	}
-
-	years := float64(this.NetDuration / (365 * 24 * time.Hour))
-	this.NetPerYear = this.NetCash / years
+		this.NetPerYear = this.NetCash / years
+	*/
 
 }
 
@@ -367,11 +368,11 @@ func (p *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
 	gvparent, err = graph.CreateNode(Spf("%p", p))
 	gvparent.SetShape("record")
 	Ck(err)
-	rowheads := "|cash|duration|return"
-	this := Spf("node | %s | %s |", form(p.NodeCash), days(p.NodeDuration))
+	rowheads := "|cash|duration|irr"
+	this := Spf("node | %s | %s |%.1f%%", form(p.NodeCash), days(p.NodeDuration), p.Mirr)
 	dates := Spf("%s - %s", p.Start.Format("2006-01-02"), p.End.Format("2006-01-02"))
 	expect := Spf("expected | %s | %s | ", form(p.ExpectedCash), days(p.ExpectedDuration))
-	net := Spf("net | %s | %s | %.1f%%", form(p.NetCash), days(p.NetDuration), p.Return)
+	net := Spf("net | %s | %s | ", form(p.NetCash), days(p.NetDuration))
 	label := Spf("%s | %s | %s | { {%s} | {%s} | {%s} | {%s}}", p.Name, p.Desc, dates, rowheads, this, expect, net)
 
 	gvparent.SetLabel(label)

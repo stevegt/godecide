@@ -1,0 +1,16 @@
+# example from https://en.wikipedia.org/wiki/Modified_internal_rate_of_return
+start: 2021-04-08
+mirr: 17.908594213355644
+npv: 998.6834178543268
+events:
+  - t: P0Y
+    finrate: 0.10
+    rerate: 0.12
+  - t: P0Y
+    cash: -1000
+  - t: P1Y
+    cash: -4000
+  - t: P2Y
+    cash: 5000
+  - t: P3Y
+    cash: 2000

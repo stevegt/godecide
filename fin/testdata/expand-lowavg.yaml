@@ -1,0 +1,25 @@
+# expand, low average demand example from exhibit VII of 
+# https://hbr.org/1964/07/decision-trees-for-decision-making 
+start: 2021-04-08
+npv: 293429.1565576452
+mirr: .Inf
+events:
+  - t: P0Y
+    finrate: 0.10
+    rerate: 0.10
+  - t: P0Y
+    cash: 	50000
+  - t: P1Y
+    cash: 	50000
+  - t: P2Y
+    cash: 	50000
+  - t: P3Y
+    cash: 	50000
+  - t: P4Y
+    cash: 	50000
+  - t: P5Y
+    cash: 	50000
+  - t: P6Y
+    cash: 	50000
+  - t: P7Y
+    cash: 	50000
