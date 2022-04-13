@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -21,19 +23,31 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-//go:embed examples/example.yaml
+//go:embed examples/*.yaml
 var fs embed.FS
 
 var now = time.Now()
 
 var Fpf = fmt.Fprintf
 
+func sayerr(args ...interface{}) {
+	msg := formatArgs(args...)
+	fmt.Fprintf(os.Stderr, msg)
+}
+
+var usage string = `Usage: %s {src} {dst}
+	- src is either 'stdin', 'example:NAME', or a filename
+	- dst is either (stdout|xdot|yaml) or a filename
+
+	e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
+
+	%s`
+
 func main() {
 
 	if len(os.Args) < 3 {
-		Fpf(os.Stderr, "usage: %s {src} {dst}\n", os.Args[0])
-		Fpf(os.Stderr, "- src is either (stdin|example) or a filename\n")
-		Fpf(os.Stderr, "- dst is either (stdout|xdot|yaml) or a filename\n")
+		sayerr(usage, os.Args[0], Examples())
+
 		os.Exit(1)
 	}
 	//  get subcommand
@@ -44,11 +58,11 @@ func main() {
 	var err error
 
 	// get input
-	switch src {
-	case "example":
-		buf, err = Example()
+	switch {
+	case strings.HasPrefix(src, "example:"):
+		buf, err = Example(src)
 		Ck(err)
-	case "stdin":
+	case src == "stdin":
 		buf, err = ioutil.ReadAll(os.Stdin)
 		Ck(err)
 	default:
@@ -393,9 +407,38 @@ func (a *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
 	return
 }
 
-func Example() (buf []byte, err error) {
+func Example(src string) (buf []byte, err error) {
 	defer Return(&err)
-	buf, err = fs.ReadFile("examples/example.yaml")
+	parts := strings.Split(src, ":")
+	Assert(len(parts) == 2, "invalid example name: %s", src)
+	name := parts[1]
+	buf, err = fs.ReadFile(Spf("examples/%s.yaml", name))
 	Ck(err)
+	return
+}
+
+func Examples() (out string) {
+	files, err := ioutil.ReadDir("examples")
+	if err != nil || len(files) == 0 {
+		return
+	}
+	out = "Examples available:\n\n"
+	re := regexp.MustCompile(`(.*)\.yaml`)
+	for _, f := range files {
+		fn := f.Name()
+		m := re.FindStringSubmatch(fn)
+		if len(m) < 2 {
+			continue
+		}
+		name := m[1]
+		buf, err := ioutil.ReadFile(Spf("examples/%s", fn))
+		Ck(err)
+		lines := strings.Split(string(buf), "\n")
+		var desc string
+		if len(lines) > 0 && strings.HasPrefix(lines[0], "#") {
+			desc = lines[0]
+		}
+		out += Spf("\t\texample:%s\t%s\n", name, desc)
+	}
 	return
 }

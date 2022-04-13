@@ -1,0 +1,58 @@
+# a notional college-choice decision during a pandemic
+college:
+  desc: college choice
+  cash: 0
+  days: 0
+  finrate: .10
+  rerate: .13
+  paths:
+    remote: .33
+    campus: .33
+    business: .33
+
+business:
+  desc: own business,\nclasses as needed, degree optional 
+  cash: -5000
+  days: 365
+  repeat: 2
+  paths:
+    fine: 1
+
+remote:
+  desc: degree via remote
+  cash: -25000
+  days: 365
+  repeat: 2
+  paths:
+    fine: 1
+
+fine:
+  desc: everything's fine
+  cash: 150000
+  days: 365
+  repeat: 40
+
+campus:
+  desc: degree on campus
+  cash: -25000
+  days: 365
+  repeat: 2
+  paths:
+    covid: .2
+    fine: .8
+
+covid:
+  desc: get sick
+  cash: -5000
+  days: 30
+  paths:
+    long: .25
+    fine: .75
+
+long:
+  desc: disabled for life
+  cash: -500000
+  days: 365
+  repeat: 60
+
+
