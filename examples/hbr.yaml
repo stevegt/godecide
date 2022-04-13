@@ -65,8 +65,8 @@ small-highinit:
 dp2:
   desc: decision point 2
   paths:
-    expand: 1
-    nochange: 0
+    expand: .5
+    nochange: .5
 
 small-lowinit:
   desc: low demand 
@@ -103,13 +103,13 @@ nochange:
     nochange-lowavg: .14
 
 nochange-highavg:
-  desc: high average demand (shared with competition)
+  desc: high average demand\n(shared with competition)
   cash: 300000
   days: 365
   repeat: 8
 
 nochange-lowavg:
-  desc: low average demand (no competition)
+  desc: low average demand\n(no competition)
   cash: 400000
   days: 365
   repeat: 8

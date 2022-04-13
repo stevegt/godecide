@@ -92,8 +92,11 @@ func main() {
 		// Ck(err)
 	*/
 
+	loMirr, hiMirr := getMirrs(roots)
+	// Pl(loMirr, hiMirr)
+
 	// show results
-	dotbuf, err := Dot(roots)
+	dotbuf, err := Dot(roots, loMirr, hiMirr)
 	Ck(err)
 	switch dst {
 	case "stdout":
@@ -142,6 +145,7 @@ type Node struct {
 	Repeat  string
 	FinRate float64
 	ReRate  float64
+	Due     time.Time
 	Paths   Paths `yaml:",omitempty"`
 }
 
@@ -169,6 +173,7 @@ type Ast struct {
 	Expected Stats
 	Start    time.Time
 	End      time.Time
+	Due      time.Time
 	Timeline fin.Timeline
 	Parent   *Ast
 	Children map[string]*Ast
@@ -180,7 +185,7 @@ func FromYAML(buf []byte) (roots []*Ast, err error) {
 	err = yaml.Unmarshal(buf, &nodes)
 	Ck(err)
 	for name, _ := range nodes.RootNodes() {
-		root := nodes.FromNode(name, 1, nil)
+		root := nodes.ToAst(name, 1, nil)
 		roots = append(roots, root)
 	}
 	return
@@ -227,7 +232,7 @@ func dieif(cond bool, args ...interface{}) {
 	os.Exit(1)
 }
 
-func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) {
+func (nodes Nodes) ToAst(name string, prob float64, parent *Ast) (root *Ast) {
 	node, ok := nodes[name]
 	dieif(!ok, "missing node: %s", name)
 
@@ -253,6 +258,7 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 			Duration: time.Duration(days) * 24 * time.Hour,
 		},
 		Repeat:  repeat,
+		Due:     node.Due,
 		FinRate: node.FinRate,
 		ReRate:  node.ReRate,
 		Prob:    prob,
@@ -263,7 +269,7 @@ func (nodes Nodes) FromNode(name string, prob float64, parent *Ast) (root *Ast) 
 
 	root.Children = make(map[string]*Ast)
 	for childname, prob := range node.Paths {
-		root.Children[childname] = nodes.FromNode(childname, prob, root)
+		root.Children[childname] = nodes.ToAst(childname, prob, root)
 	}
 	return
 }
@@ -295,6 +301,10 @@ func (this *Ast) Forward(parent *Ast) {
 	this.Timeline.Recalc()
 	this.Path.Npv = this.Timeline.Npv()
 	this.Path.Mirr = this.Timeline.Mirr()
+	if !this.Due.IsZero() && this.End.After(this.Due) {
+		sayerr("late: %s\n", this.Name)
+		this.Path.Mirr = math.NaN()
+	}
 
 	/*
 		Pl(this.Name)
@@ -319,7 +329,7 @@ func (this *Ast) Backward() {
 			totalProb += child.Prob
 		}
 		if math.Abs(totalProb-1) > .001 {
-			fmt.Fprintf(os.Stderr, "normalizing path probabilities: %s\n", this.Name)
+			sayerr("normalizing path probabilities: %s\n", this.Name)
 			for _, child := range this.Children {
 				child.Prob /= totalProb
 			}
@@ -340,7 +350,7 @@ func (this *Ast) Backward() {
 	}
 }
 
-func Dot(roots []*Ast) (buf bytes.Buffer, err error) {
+func Dot(roots []*Ast, loMirr, hiMirr float64) (buf bytes.Buffer, err error) {
 	g := graphviz.New()
 	graph, err := g.Graph()
 	Ck(err)
@@ -353,7 +363,7 @@ func Dot(roots []*Ast) (buf bytes.Buffer, err error) {
 	graph.SetRankDir("LR")
 
 	for _, root := range roots {
-		root.Dot(graph)
+		root.Dot(graph, loMirr, hiMirr)
 	}
 
 	err = g.Render(graph, "dot", &buf)
@@ -373,13 +383,43 @@ func days(d time.Duration) string {
 // Dot adds a record-shaped node to the graphviz graph for Ast node p
 // (parent), and adds a graphviz edge from p to each of the children
 // of p.
-func (a *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
+func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 	gvparent, err = graph.CreateNode(Spf("%p", a))
-	gvparent.SetShape("record")
 	Ck(err)
 
+	gvparent.SetShape("record")
+
+	gvparent.SetStyle("filled")
+	mirr := a.Expected.Mirr
+	var hue float64
+	if math.IsNaN(mirr) || math.IsInf(mirr, 0) {
+		gvparent.SetFillColor("white")
+	} else {
+		// hue := 120 / 360.0 * (mirr - loMirr) / float64(hiMirr-loMirr)
+		if mirr > 0 {
+			hue = 20/360.0 + 100/360.0*(mirr-0)/(hiMirr-0)
+		} else {
+			hue = 60 / 360.0 * (mirr - loMirr) / math.Abs(loMirr)
+		}
+		// Pl(hue, mirr, loMirr, hiMirr, (mirr - loMirr), float64(hiMirr-loMirr))
+		if math.IsNaN(hue) {
+			sayerr("hue NaN %f %f %f\n", loMirr, hiMirr, mirr)
+			hue = 0
+		}
+		color := Spf("%.3f 1.0 1.0", hue)
+		gvparent.SetFillColor(color)
+	}
+
 	dates := Spf("%s - %s", a.Start.Format("2006-01-02"), a.End.Format("2006-01-02"))
+	if !a.Due.IsZero() {
+		dates = Spf("%s \\n due: %s", dates, a.Due.Format("2006-01-02"))
+		if a.End.After(a.Due) {
+			color := Spf("%.3f 1.0 1.0", hue)
+			gvparent.SetFontColor(color)
+			gvparent.SetFillColor("0.0 0.0 0.3")
+		}
+	}
 	// row headings
 	head := "             |cash|duration|npv    |mirr  "
 
@@ -392,18 +432,46 @@ func (a *Ast) Dot(graph *cgraph.Graph) (gvparent *cgraph.Node, err error) {
 	expe := Spf("expected | %s | %s     | %s    |%.1f%% ", form(e.Cash), days(e.Duration), form(e.Npv), e.Mirr)
 
 	// put it all together
-	label := Spf("%s | %s | %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
-
+	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
 	gvparent.SetLabel(label)
 	for _, child := range a.Children {
-		// XXX should first verify that child exists in node list so
-		// we don't silently create a zero-filled node
-		gvchild, err := child.Dot(graph)
+		gvchild, err := child.Dot(graph, loMirr, hiMirr)
 		Ck(err)
 		edge, err := graph.CreateEdge("", gvparent, gvchild)
 		Ck(err)
 		edge.SetLabel(Spf("%.2f", child.Prob))
+		edge.SetPenWidth(math.Pow(child.Prob+.1, .5) * 10)
 	}
+	return
+}
+
+func getMirrs(as []*Ast) (lo, hi float64) {
+	lo = math.MaxFloat64
+	hi = math.MaxFloat64 * -1
+	Assert(!math.IsInf(lo, 0), lo)
+	Assert(!math.IsInf(hi, 0), hi)
+	for _, a := range as {
+		var children []*Ast
+		for _, c := range a.Children {
+			children = append(children, c)
+		}
+		clo, chi := getMirrs(children)
+		if !math.IsNaN(clo) {
+			lo = math.Min(lo, clo)
+		}
+		if !math.IsNaN(chi) {
+			hi = math.Max(hi, chi)
+		}
+		mirr := a.Expected.Mirr
+		if !math.IsNaN(mirr) {
+			lo = math.Min(lo, mirr)
+			hi = math.Max(hi, mirr)
+		}
+	}
+	Assert(!math.IsInf(lo, 0), lo)
+	Assert(!math.IsInf(hi, 0), hi)
+	Assert(!math.IsNaN(lo), lo)
+	Assert(!math.IsNaN(hi), hi)
 	return
 }
 

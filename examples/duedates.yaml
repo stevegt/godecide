@@ -1,0 +1,35 @@
+apple:
+  desc: oidsaknfdsj lkkljlkj jk
+  cash: -1000
+  days: 7
+  paths:
+    bar: 0.3
+    foo: 0.7
+
+bar:
+  desc: tax return
+  cash: 100
+  days: 73
+  due: 2022-04-15
+  paths:
+    bing: .8
+    baz: .2
+
+foo:
+  desc: lkdsaj falskdjf dsal
+  cash: 1000
+  days: 23
+  paths:
+    bing: .1
+    baz: .6
+
+bing:
+  desc: uewoslkfd lkj fd
+  cash: 3200
+  days: 360
+
+baz:
+  desc: oiwuekjnvcxkhh hdskjh s
+  cash: 800
+  days: 76
+
