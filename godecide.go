@@ -1,4 +1,4 @@
-package main
+package godecide
 
 import (
 	"bytes"
@@ -7,8 +7,6 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
-	"os/exec"
-	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -23,120 +21,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-//go:embed examples/*.yaml
-var fs embed.FS
+type Warn func(args ...interface{})
 
-var now = time.Now()
-
-var Fpf = fmt.Fprintf
-
-func sayerr(args ...interface{}) {
-	msg := formatArgs(args...)
-	fmt.Fprintf(os.Stderr, msg)
-}
-
-var usage string = `Usage: %s {src} {dst}
-	- src is either 'stdin', 'example:NAME', or a filename
-	- dst is either (stdout|xdot|yaml) or a filename
-
-	e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
-
-	%s`
-
-func main() {
-
-	if len(os.Args) < 3 {
-		sayerr(usage, os.Args[0], Examples())
-
-		os.Exit(1)
-	}
-	//  get subcommand
-	src := os.Args[1]
-	dst := os.Args[2]
-
-	var buf []byte
-	var err error
-
-	// get input
-	switch {
-	case strings.HasPrefix(src, "example:"):
-		buf, err = Example(src)
-		Ck(err)
-	case src == "stdin":
-		buf, err = ioutil.ReadAll(os.Stdin)
-		Ck(err)
-	default:
-		buf, err = ioutil.ReadFile(src)
-		Ck(err)
-	}
-
-	// parse
-	roots, err := FromYAML(buf)
-	Ck(err)
-
-	// sum up Cash and Duration
-	for _, root := range roots {
-		root.Forward(nil)
-	}
-
-	// calculate Probable values
-	for _, root := range roots {
-		root.Backward()
-	}
-
-	/*
-		debugbuf := &bytes.Buffer{}
-		memviz.Map(debugbuf, &roots)
-		fmt.Println(debugbuf.String())
-		// err := ioutil.WriteFile("roots.dot", buf.Bytes(), 0644)
-		// Ck(err)
-	*/
-
-	loMirr, hiMirr := getMirrs(roots)
-	// Pl(loMirr, hiMirr)
-
-	// show results
-	dotbuf, err := Dot(roots, loMirr, hiMirr)
-	Ck(err)
-	switch dst {
-	case "stdout":
-		fmt.Print(dotbuf.String())
-	case "yaml":
-		fmt.Print(string(buf))
-	case "xdot":
-		tmpfile, err := ioutil.TempFile("/tmp", "godecide.*.dot")
-		Ck(err)
-		defer os.Remove(tmpfile.Name())
-		_, err = tmpfile.Write(dotbuf.Bytes())
-		Ck(err)
-		err = tmpfile.Close()
-		Ck(err)
-		cmd := exec.Command("xdot", tmpfile.Name())
-		err = cmd.Run()
-		Ck(err)
-	default:
-		fh, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-		if err != nil {
-			// backup existing dst file
-			bakfn := Spf("%s-*.dot", path.Base(dst))
-			bakfh, err := ioutil.TempFile("/tmp", bakfn)
-			Ck(err)
-			bakbuf, err := ioutil.ReadFile(dst)
-			Ck(err)
-			_, err = bakfh.Write(bakbuf)
-			Ck(err)
-			err = bakfh.Close()
-			Ck(err)
-			fh, err = os.OpenFile(dst, os.O_WRONLY|os.O_TRUNC, 0644)
-			Ck(err)
-		}
-		_, err = fh.Write(dotbuf.Bytes())
-		Ck(err)
-		err = fh.Close()
-		Ck(err)
-	}
-
-}
+// XXX
+// Yaml in, roots in, roots out
+// FromYAML and ToDot are exported
+// example funcs are here but exported
 
 type Node struct {
 	Desc    string
@@ -207,16 +97,6 @@ func (nodes Nodes) RootNodes() (rootnodes Nodes) {
 	return
 }
 
-func formatArgs(args ...interface{}) (msg string) {
-	if len(args) == 1 {
-		msg = fmt.Sprintf("%v", args[0])
-	}
-	if len(args) > 1 {
-		msg = fmt.Sprintf(args[0].(string), args[1:]...)
-	}
-	return
-}
-
 func dieif(cond bool, args ...interface{}) {
 	if cond == false {
 		return
@@ -275,7 +155,7 @@ func (nodes Nodes) ToAst(name string, prob float64, parent *Ast) (root *Ast) {
 }
 
 // calculate .Path.*
-func (this *Ast) Forward(parent *Ast) {
+func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
 	if parent != nil {
 		this.Timeline = parent.Timeline
 		this.Path.Cash = parent.Path.Cash
@@ -302,8 +182,8 @@ func (this *Ast) Forward(parent *Ast) {
 	this.Path.Npv = this.Timeline.Npv()
 	this.Path.Mirr = this.Timeline.Mirr()
 	if !this.Due.IsZero() && this.End.After(this.Due) {
-		sayerr("late: %s\n", this.Name)
-		this.Path.Mirr = math.NaN()
+		warn("late: %s\n", this.Name)
+		this.Expected.Mirr = math.NaN()
 	}
 
 	/*
@@ -316,12 +196,12 @@ func (this *Ast) Forward(parent *Ast) {
 	*/
 
 	for _, child := range this.Children {
-		child.Forward(this)
+		child.Forward(this, now, warn)
 	}
 }
 
 // calculate .Expected.*
-func (this *Ast) Backward() {
+func (this *Ast) Backward(warn Warn) {
 	if len(this.Children) > 0 {
 		// root or inner node
 		totalProb := 0.0
@@ -329,13 +209,13 @@ func (this *Ast) Backward() {
 			totalProb += child.Prob
 		}
 		if math.Abs(totalProb-1) > .001 {
-			sayerr("normalizing path probabilities: %s\n", this.Name)
+			warn("normalizing path probabilities: %s\n", this.Name)
 			for _, child := range this.Children {
 				child.Prob /= totalProb
 			}
 		}
 		for _, child := range this.Children {
-			child.Backward()
+			child.Backward(warn)
 			this.Expected.Cash += child.Expected.Cash * child.Prob
 			this.Expected.Duration += time.Duration(float64(child.Expected.Duration) * child.Prob)
 			this.Expected.Npv += child.Expected.Npv * child.Prob
@@ -350,27 +230,6 @@ func (this *Ast) Backward() {
 	}
 }
 
-func Dot(roots []*Ast, loMirr, hiMirr float64) (buf bytes.Buffer, err error) {
-	g := graphviz.New()
-	graph, err := g.Graph()
-	Ck(err)
-	defer func() {
-		err := graph.Close()
-		Ck(err)
-		g.Close()
-	}()
-
-	graph.SetRankDir("LR")
-
-	for _, root := range roots {
-		root.Dot(graph, loMirr, hiMirr)
-	}
-
-	err = g.Render(graph, "dot", &buf)
-	Ck(err)
-	return
-}
-
 func form(n float64) string {
 	res := humanize.Comma(int64(n))
 	return res
@@ -383,7 +242,7 @@ func days(d time.Duration) string {
 // Dot adds a record-shaped node to the graphviz graph for Ast node p
 // (parent), and adds a graphviz edge from p to each of the children
 // of p.
-func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64) (gvparent *cgraph.Node, err error) {
+func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 	gvparent, err = graph.CreateNode(Spf("%p", a))
 	Ck(err)
@@ -404,7 +263,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64) (gvparent *cgraph
 		}
 		// Pl(hue, mirr, loMirr, hiMirr, (mirr - loMirr), float64(hiMirr-loMirr))
 		if math.IsNaN(hue) {
-			sayerr("hue NaN %f %f %f\n", loMirr, hiMirr, mirr)
+			warn("hue NaN %f %f %f\n", loMirr, hiMirr, mirr)
 			hue = 0
 		}
 		color := Spf("%.3f 1.0 1.0", hue)
@@ -435,7 +294,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64) (gvparent *cgraph
 	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
 	gvparent.SetLabel(label)
 	for _, child := range a.Children {
-		gvchild, err := child.Dot(graph, loMirr, hiMirr)
+		gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 		Ck(err)
 		edge, err := graph.CreateEdge("", gvparent, gvchild)
 		Ck(err)
@@ -475,7 +334,51 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 	return
 }
 
-func Example(src string) (buf []byte, err error) {
+//go:embed examples/*.yaml
+var fs embed.FS
+
+func TreeCalc(roots []*Ast, now time.Time, warn Warn) {
+
+	// sum up Cash and Duration
+	for _, root := range roots {
+		root.Forward(nil, now, warn)
+	}
+
+	// calculate Probable values
+	for _, root := range roots {
+		root.Backward(warn)
+	}
+}
+
+func ToDot(roots []*Ast, warn Warn) (buf []byte) {
+
+	loMirr, hiMirr := getMirrs(roots)
+	// Pl(loMirr, hiMirr)
+
+	g := graphviz.New()
+	graph, err := g.Graph()
+	Ck(err)
+	defer func() {
+		err := graph.Close()
+		Ck(err)
+		g.Close()
+	}()
+
+	graph.SetRankDir("LR")
+
+	for _, root := range roots {
+		root.Dot(graph, loMirr, hiMirr, warn)
+	}
+
+	var dotbuf bytes.Buffer
+	err = g.Render(graph, "dot", &dotbuf)
+	Ck(err)
+
+	buf = dotbuf.Bytes()
+	return
+}
+
+func CatExample(src string) (buf []byte, err error) {
 	defer Return(&err)
 	parts := strings.Split(src, ":")
 	Assert(len(parts) == 2, "invalid example name: %s", src)
@@ -485,7 +388,7 @@ func Example(src string) (buf []byte, err error) {
 	return
 }
 
-func Examples() (out string) {
+func LsExamples() (out string) {
 	files, err := ioutil.ReadDir("examples")
 	if err != nil || len(files) == 0 {
 		return
@@ -506,7 +409,7 @@ func Examples() (out string) {
 		if len(lines) > 0 && strings.HasPrefix(lines[0], "#") {
 			desc = lines[0]
 		}
-		out += Spf("\t\texample:%s\t%s\n", name, desc)
+		out += Spf("\t\texample:%-15s%s\n", name, desc)
 	}
 	return
 }
