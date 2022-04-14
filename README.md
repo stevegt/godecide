@@ -7,5 +7,5 @@ real options valuation decision tree tool
 ## install
 
 ```
-go install -v github.com/stevegt/godecide/cmd/godecide@latest
+go install -v github.com/stevegt/godecide@latest
 ```

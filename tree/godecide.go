@@ -334,9 +334,6 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 	return
 }
 
-//go:embed examples/*.yaml
-var fs embed.FS
-
 func TreeCalc(roots []*Ast, now time.Time, warn Warn) {
 
 	// sum up Cash and Duration
@@ -378,7 +375,7 @@ func ToDot(roots []*Ast, warn Warn) (buf []byte) {
 	return
 }
 
-func CatExample(src string) (buf []byte, err error) {
+func CatExample(fs embed.FS, src string) (buf []byte, err error) {
 	defer Return(&err)
 	parts := strings.Split(src, ":")
 	Assert(len(parts) == 2, "invalid example name: %s", src)
@@ -388,8 +385,8 @@ func CatExample(src string) (buf []byte, err error) {
 	return
 }
 
-func LsExamples() (out string) {
-	files, err := ioutil.ReadDir("examples")
+func LsExamples(fs embed.FS) (out string) {
+	files, err := fs.ReadDir("examples")
 	if err != nil || len(files) == 0 {
 		return
 	}
