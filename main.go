@@ -11,7 +11,7 @@ import (
 	"time"
 
 	. "github.com/stevegt/goadapt"
-	godecide "github.com/stevegt/godecide/tree"
+	"github.com/stevegt/godecide/tree"
 )
 
 //go:embed examples/*.yaml
@@ -29,7 +29,7 @@ func main() {
 	now := time.Now()
 
 	if len(os.Args) < 3 {
-		warn(usage, os.Args[0], godecide.LsExamples(fs))
+		warn(usage, os.Args[0], tree.LsExamples(fs))
 		os.Exit(1)
 	}
 	//  get subcommand
@@ -42,7 +42,7 @@ func main() {
 	// get input
 	switch {
 	case strings.HasPrefix(src, "example:"):
-		buf, err = godecide.CatExample(fs, src)
+		buf, err = tree.CatExample(fs, src)
 		Ck(err)
 	case src == "stdin":
 		buf, err = ioutil.ReadAll(os.Stdin)
@@ -53,12 +53,12 @@ func main() {
 	}
 
 	// parse
-	roots, err := godecide.FromYAML(buf)
+	roots, err := tree.FromYAML(buf)
 	Ck(err)
 
-	godecide.TreeCalc(roots, now, warn)
+	tree.TreeCalc(roots, now, warn)
 
-	dotbuf := godecide.ToDot(roots, warn)
+	dotbuf := tree.ToDot(roots, warn)
 
 	switch dst {
 	case "stdout":

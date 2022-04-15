@@ -1,4 +1,4 @@
-package godecide
+package tree
 
 import (
 	"bytes"
@@ -22,11 +22,6 @@ import (
 )
 
 type Warn func(args ...interface{})
-
-// XXX
-// Yaml in, roots in, roots out
-// FromYAML and ToDot are exported
-// example funcs are here but exported
 
 type Node struct {
 	Desc    string
@@ -341,7 +336,7 @@ func TreeCalc(roots []*Ast, now time.Time, warn Warn) {
 		root.Forward(nil, now, warn)
 	}
 
-	// calculate Probable values
+	// calculate expected values
 	for _, root := range roots {
 		root.Backward(warn)
 	}
