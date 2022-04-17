@@ -69,10 +69,22 @@ func FromYAML(buf []byte) (roots []*Ast, err error) {
 	var nodes Nodes
 	err = yaml.Unmarshal(buf, &nodes)
 	Ck(err)
+	roots = nodes.ToAst()
+	return
+}
+
+func (nodes Nodes) ToAst() (roots []*Ast) {
 	for name, _ := range nodes.RootNodes() {
-		root := nodes.ToAst(name, 1, nil)
+		root := nodes.toAst(name, 1, nil)
 		roots = append(roots, root)
 	}
+	return
+}
+
+func (nodes Nodes) ToYAML() (buf []byte, err error) {
+	defer Return(&err)
+	buf, err = yaml.Marshal(&nodes)
+	Ck(err)
 	return
 }
 
@@ -107,7 +119,7 @@ func dieif(cond bool, args ...interface{}) {
 	os.Exit(1)
 }
 
-func (nodes Nodes) ToAst(name string, prob float64, parent *Ast) (root *Ast) {
+func (nodes Nodes) toAst(name string, prob float64, parent *Ast) (root *Ast) {
 	node, ok := nodes[name]
 	dieif(!ok, "missing node: %s", name)
 
@@ -144,7 +156,7 @@ func (nodes Nodes) ToAst(name string, prob float64, parent *Ast) (root *Ast) {
 
 	root.Children = make(map[string]*Ast)
 	for childname, prob := range node.Paths {
-		root.Children[childname] = nodes.ToAst(childname, prob, root)
+		root.Children[childname] = nodes.toAst(childname, prob, root)
 	}
 	return
 }
@@ -177,7 +189,7 @@ func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
 	this.Path.Npv = this.Timeline.Npv()
 	this.Path.Mirr = this.Timeline.Mirr()
 	if !this.Due.IsZero() && this.End.After(this.Due) {
-		warn("late: %s\n", this.Name)
+		warn("late: %s end %s due %s\n", this.Name, this.End, this.Due)
 		this.Expected.Mirr = math.NaN()
 	}
 
@@ -317,7 +329,7 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 			hi = math.Max(hi, chi)
 		}
 		mirr := a.Expected.Mirr
-		if !math.IsNaN(mirr) {
+		if !math.IsNaN(mirr) && !math.IsInf(mirr, 0) {
 			lo = math.Min(lo, mirr)
 			hi = math.Max(hi, mirr)
 		}
@@ -329,7 +341,7 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 	return
 }
 
-func TreeCalc(roots []*Ast, now time.Time, warn Warn) {
+func Recalc(roots []*Ast, now time.Time, warn Warn) {
 
 	// sum up Cash and Duration
 	for _, root := range roots {

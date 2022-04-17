@@ -56,7 +56,7 @@ func main() {
 	roots, err := tree.FromYAML(buf)
 	Ck(err)
 
-	tree.TreeCalc(roots, now, warn)
+	tree.Recalc(roots, now, warn)
 
 	dotbuf := tree.ToDot(roots, warn)
 
