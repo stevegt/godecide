@@ -294,8 +294,8 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	p := a.Path
 	e := a.Expected
 	node := Spf("node     | %s | %s     | %s    |      ", form(n.Cash), days(n.Duration), form(n.Npv))
-	path := Spf("path     | %s | %s     | %s    |%.1f%% ", form(p.Cash), days(p.Duration), form(p.Npv), p.Mirr)
-	expe := Spf("expected | %s | %s     | %s    |%.1f%% ", form(e.Cash), days(e.Duration), form(e.Npv), e.Mirr)
+	path := Spf("past     | %s | %s     | %s    |%.1f%% ", form(p.Cash), days(p.Duration), form(p.Npv), p.Mirr)
+	expe := Spf("future   | %s | %s     | %s    |%.1f%% ", form(e.Cash), days(e.Duration), form(e.Npv), e.Mirr)
 
 	// put it all together
 	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
