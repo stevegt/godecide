@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"regexp"
@@ -406,7 +405,7 @@ func LsExamples(fs embed.FS) (out string) {
 			continue
 		}
 		name := m[1]
-		buf, err := ioutil.ReadFile(Spf("examples/%s", fn))
+		buf, err := fs.ReadFile(Spf("examples/%s", fn))
 		Ck(err)
 		lines := strings.Split(string(buf), "\n")
 		var desc string
