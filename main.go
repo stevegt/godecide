@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -17,9 +18,13 @@ import (
 //go:embed examples/*.yaml
 var fs embed.FS
 
-var usage string = `Usage: %s {src} {dst}
-	- src is either 'stdin', 'example:NAME', or a filename
-	- dst is either (stdout|xdot|yaml) or a filename
+var usage string = `Usage: %s [-tb] {src} {dst}
+	src: either 'stdin', 'example:NAME', or a filename
+	dst: either (stdout|xdot|yaml) or a filename
+
+	-tb:  set graphviz rankdir=TB (top to bottom)
+
+	Examples:
 
 	e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
 
@@ -28,13 +33,24 @@ var usage string = `Usage: %s {src} {dst}
 func main() {
 	now := time.Now()
 
-	if len(os.Args) < 3 {
-		warn(usage, os.Args[0], tree.LsExamples(fs))
+	// set custom usage
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, usage, os.Args[0], tree.LsExamples(fs))
+	}
+
+	// parse flags
+	var tb bool
+	flag.BoolVar(&tb, "tb", false, "set graphviz rankdir=TB (top to bottom)")
+	flag.Parse()
+
+	if flag.NArg() != 2 {
+		flag.Usage()
 		os.Exit(1)
 	}
-	//  get subcommand
-	src := os.Args[1]
-	dst := os.Args[2]
+
+	// get src and dst
+	src := flag.Arg(0)
+	dst := flag.Arg(1)
 
 	var buf []byte
 	var err error
@@ -58,7 +74,7 @@ func main() {
 
 	tree.Recalc(roots, now, warn)
 
-	dotbuf := tree.ToDot(roots, warn)
+	dotbuf := tree.ToDot(roots, warn, tb)
 
 	switch dst {
 	case "stdout":

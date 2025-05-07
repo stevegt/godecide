@@ -257,22 +257,26 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 
 	gvparent.SetStyle("filled")
 	mirr := a.Expected.Mirr
-	var hue float64
+	Assert(mirr >= loMirr, mirr)
+	Assert(mirr <= hiMirr, mirr)
+	var hue, value float64
 	if math.IsNaN(mirr) || math.IsInf(mirr, 0) {
 		gvparent.SetFillColor("white")
 	} else {
 		// hue := 120 / 360.0 * (mirr - loMirr) / float64(hiMirr-loMirr)
 		if mirr > 0 {
 			hue = 20/360.0 + 100/360.0*(mirr-0)/(hiMirr-0)
+			value = math.Max(0.4, mirr/hiMirr)
 		} else {
 			hue = 60 / 360.0 * (mirr - loMirr) / math.Abs(loMirr)
+			value = math.Max(0.4, (0-mirr)/(0-loMirr))
 		}
 		// Pl(hue, mirr, loMirr, hiMirr, (mirr - loMirr), float64(hiMirr-loMirr))
 		if math.IsNaN(hue) {
 			warn("hue NaN %f %f %f\n", loMirr, hiMirr, mirr)
 			hue = 0
 		}
-		color := Spf("%.3f 1.0 1.0", hue)
+		color := Spf("%.3f 1.0 %.3f", hue, value)
 		gvparent.SetFillColor(color)
 	}
 
@@ -353,7 +357,7 @@ func Recalc(roots []*Ast, now time.Time, warn Warn) {
 	}
 }
 
-func ToDot(roots []*Ast, warn Warn) (buf []byte) {
+func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
 
 	loMirr, hiMirr := getMirrs(roots)
 	// Pl(loMirr, hiMirr)
@@ -367,7 +371,11 @@ func ToDot(roots []*Ast, warn Warn) (buf []byte) {
 		g.Close()
 	}()
 
-	graph.SetRankDir("LR")
+	if tb {
+		graph.SetRankDir("TB")
+	} else {
+		graph.SetRankDir("LR")
+	}
 
 	for _, root := range roots {
 		root.Dot(graph, loMirr, hiMirr, warn)
