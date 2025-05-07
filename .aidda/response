@@ -1,22 +1,251 @@
-The problem is that if a node’s due date is in the past then Forward
-sets its expected MIRR to NaN. Later when Dot is trying to determine
-color (and asserting that MIRR lies between loMirr and hiMirr),
-comparing NaN always fails. In other words, the dot generation code
-isn’t ready to handle a NaN MIRR value, so it fails (via the Assert
-calls).
-
-A simple fix is to have Dot check for NaN (or Inf) before performing
-the assertions and, if found, use default colors (or a “late” color)
-without trying to normalize the value. For example, you can change the
-beginning of Dot so that the assertions and hue calculations are done
-only when Expected.Mirr is a real number.
-
-Below is the modified version of the Dot method where we check if mirr
-is NaN or Inf before doing the assertions. (Other parts of the code
-remain the same.)
-
-------------------------------------------------------------
+File: /home/stevegt/lab/godecide/tree/godecide.go
+```go
 package tree
+
+import (
+	"bytes"
+	"embed"
+	"fmt"
+	"math"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/dustin/go-humanize"
+	"github.com/goccy/go-graphviz"
+	"github.com/goccy/go-graphviz/cgraph"
+	"github.com/soudy/mathcat"
+	. "github.com/stevegt/goadapt"
+	"github.com/stevegt/godecide/fin"
+
+	"gopkg.in/yaml.v2"
+)
+
+type Warn func(args ...interface{})
+
+type Node struct {
+	Desc    string
+	Cash    string
+	Days    string
+	Repeat  string
+	FinRate float64
+	ReRate  float64
+	Due     time.Time
+	Paths   Paths `yaml:",omitempty"`
+}
+
+type Paths map[string]float64
+
+type Nodes map[string]Node
+
+type Stats struct {
+	Duration time.Duration
+	Cash     float64
+	Npv      float64
+	Mirr     float64
+}
+
+type Ast struct {
+	Name     string
+	Desc     string
+	Repeat   int
+	Prob     float64
+	FinRate  float64
+	ReRate   float64
+	Period   Stats
+	Node     Stats
+	Path     Stats
+	Expected Stats
+	Start    time.Time
+	End      time.Time
+	Due      time.Time
+	Timeline fin.Timeline
+	Parent   *Ast
+	Children map[string]*Ast
+}
+
+func FromYAML(buf []byte) (roots []*Ast, err error) {
+	defer Return(&err)
+	var nodes Nodes
+	err = yaml.Unmarshal(buf, &nodes)
+	Ck(err)
+	roots = nodes.ToAst()
+	return
+}
+
+func (nodes Nodes) ToAst() (roots []*Ast) {
+	for name, _ := range nodes.RootNodes() {
+		root := nodes.toAst(name, 1, nil)
+		roots = append(roots, root)
+	}
+	return
+}
+
+func (nodes Nodes) ToYAML() (buf []byte, err error) {
+	defer Return(&err)
+	buf, err = yaml.Marshal(&nodes)
+	Ck(err)
+	return
+}
+
+// RootNode returns a map of all root nodes.
+func (nodes Nodes) RootNodes() (rootnodes Nodes) {
+	rootnodes = make(Nodes)
+	// accumulate all names
+	for name, node := range nodes {
+		rootnodes[name] = node
+	}
+	// remove children from list
+	for _, parent := range nodes {
+		for child, _ := range parent.Paths {
+			delete(rootnodes, child)
+		}
+	}
+	return
+}
+
+func dieif(cond bool, args ...interface{}) {
+	if cond == false {
+		return
+	}
+	var msg string
+	if len(args) == 1 {
+		msg = fmt.Sprintf("%v", args[0])
+	}
+	if len(args) > 1 {
+		msg = fmt.Sprintf(args[0].(string), args[1:]...)
+	}
+	fmt.Fprintf(os.Stderr, "%v\n", msg)
+	os.Exit(1)
+}
+
+func (nodes Nodes) toAst(name string, prob float64, parent *Ast) (root *Ast) {
+	node, ok := nodes[name]
+	dieif(!ok, "missing node: %s", name)
+
+	cashrat, err := mathcat.Eval(node.Cash)
+	dieif(err != nil, err)
+	cash, _ := cashrat.Float64()
+
+	daysrat, err := mathcat.Eval(node.Days)
+	dieif(err != nil, err)
+	days, _ := daysrat.Float64()
+
+	repeatrat, err := mathcat.Eval(node.Repeat)
+	dieif(err != nil, err)
+	dieif(!(repeatrat.IsInt() && repeatrat.Denom().Int64() == 1), "repeat must evaluate to int: %s", node)
+	repeat := int(repeatrat.Num().Int64())
+	repeat = int(math.Max(1, float64(repeat)))
+
+	root = &Ast{
+		Name: name,
+		Desc: node.Desc,
+		Period: Stats{
+			Cash:     cash,
+			Duration: time.Duration(days) * 24 * time.Hour,
+		},
+		Repeat:  repeat,
+		Due:     node.Due,
+		FinRate: node.FinRate,
+		ReRate:  node.ReRate,
+		Prob:    prob,
+		Parent:  parent,
+	}
+	root.Node.Cash = root.Period.Cash * float64(root.Repeat)
+	root.Node.Duration = root.Period.Duration * time.Duration(root.Repeat)
+
+	root.Children = make(map[string]*Ast)
+	for childname, prob := range node.Paths {
+		root.Children[childname] = nodes.toAst(childname, prob, root)
+	}
+	return
+}
+
+// calculate .Path.*
+func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
+	if parent != nil {
+		this.Timeline = parent.Timeline
+		this.Path.Cash = parent.Path.Cash
+		this.Path.Duration = parent.Path.Duration
+	}
+
+	this.Start = now.Add(this.Path.Duration)
+	this.Path.Cash += this.Node.Cash
+	this.Path.Duration += this.Node.Duration
+	this.End = now.Add(this.Path.Duration)
+
+	if this.FinRate != 0 {
+		this.Timeline.SetFinRate(this.Start, this.FinRate)
+	}
+	if this.ReRate != 0 {
+		this.Timeline.SetReRate(this.Start, this.ReRate)
+	}
+	for i := 1; i <= this.Repeat; i++ {
+		var date time.Time
+		date = this.Start.Add(time.Duration(i) * this.Period.Duration)
+		this.Timeline.Event(date, this.Period.Cash)
+	}
+	this.Timeline.Recalc()
+	this.Path.Npv = this.Timeline.Npv()
+	this.Path.Mirr = this.Timeline.Mirr()
+	if !this.Due.IsZero() && this.End.After(this.Due) {
+		warn("late: %s end %s due %s\n", this.Name, this.End, this.Due)
+		this.Expected.Mirr = math.NaN()
+	}
+
+	/*
+		Pl(this.Name)
+		for _, t := range this.Timeline.Events() {
+			Pf("%v %v\n", t.Date, t.Cash)
+		}
+		Pf("%.2f\n", this.Path.Mirr)
+		Pl()
+	*/
+
+	for _, child := range this.Children {
+		child.Forward(this, now, warn)
+	}
+}
+
+// calculate .Expected.*
+func (this *Ast) Backward(warn Warn) {
+	if len(this.Children) > 0 {
+		// root or inner node
+		totalProb := 0.0
+		for _, child := range this.Children {
+			totalProb += child.Prob
+		}
+		if math.Abs(totalProb-1) > .001 {
+			warn("normalizing path probabilities: %s\n", this.Name)
+			for _, child := range this.Children {
+				child.Prob /= totalProb
+			}
+		}
+		for _, child := range this.Children {
+			child.Backward(warn)
+			this.Expected.Cash += child.Expected.Cash * child.Prob
+			this.Expected.Duration += time.Duration(float64(child.Expected.Duration) * child.Prob)
+			this.Expected.Npv += child.Expected.Npv * child.Prob
+			this.Expected.Mirr += child.Expected.Mirr * child.Prob
+		}
+	} else {
+		// leaf -- we fold the path stuff back into expected here, and only here
+		this.Expected.Cash = this.Path.Cash
+		this.Expected.Duration = this.Path.Duration
+		this.Expected.Npv = this.Path.Npv
+		this.Expected.Mirr = this.Path.Mirr
+	}
+}
+
+func form(n float64) string {
+	res := humanize.Comma(int64(n))
+	return res
+}
+
+func days(d time.Duration) string {
+	return Spf("%.0f days", float64(d)/float64(24*time.Hour))
+}
 
 // Dot adds a record-shaped node to the graphviz graph for Ast node a
 // (parent), and adds a graphviz edge from a to each of the children
@@ -24,27 +253,32 @@ package tree
 func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 
-	fmt.Fprintf(os.Stderr, "Dot %s\n", a.Name)
-
 	gvparent, err = graph.CreateNode(Spf("%p", a))
 	Ck(err)
 
 	gvparent.SetShape("record")
 	gvparent.SetStyle("filled")
-
 	mirr := a.Expected.Mirr
 	var hue, value float64
 	if math.IsNaN(mirr) || math.IsInf(mirr, 0) {
-		// For nodes with an invalid MIRR, simply use a default color.
 		gvparent.SetFillColor("white")
 	} else {
-		Assert(mirr >= loMirr, mirr)
-		Assert(mirr <= hiMirr, mirr)
-		if mirr > 0 {
+		switch {
+		case math.IsNaN(mirr):
+			warn("NaN mirr %f\n", mirr)
+			hue = 0
+			value = 0.4
+		case mirr < loMirr:
+			fallthrough
+		case mirr > hiMirr:
+			warn("lomirr %f mirr %f himirr %f\n", loMirr, mirr, hiMirr)
+			hue = 0
+			value = 0.4
+		case mirr > 0:
 			hue = 20/360.0 + 100/360.0*(mirr-0)/(hiMirr-0)
 			value = math.Max(0.4, mirr/hiMirr)
-		} else {
-			hue = 60/360.0 * (mirr - loMirr) / math.Abs(loMirr)
+		default:
+			hue = 60 / 360.0 * (mirr - loMirr) / math.Abs(loMirr)
 			value = math.Max(0.4, (0-mirr)/(0-loMirr))
 		}
 		if math.IsNaN(hue) {
@@ -65,33 +299,183 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 		}
 	}
 
-	// row headings
-	head := "             |cash|duration|npv    |mirr  "
-
-	// columns
+	// Prepare dynamic table columns: cash, duration, npv, mirr.
 	n := a.Node
 	p := a.Path
 	e := a.Expected
-	node := Spf("node     | %s | %s     | %s    |      ", form(n.Cash), days(n.Duration), form(n.Npv))
-	path := Spf("past     | %s | %s     | %s    |%.1f%% ", form(p.Cash), days(p.Duration), form(p.Npv), p.Mirr)
-	expe := Spf("future   | %s | %s     | %s    |%.1f%% ", form(e.Cash), days(e.Duration), form(e.Npv), e.Mirr)
+
+	// Determine which metrics have non-zero (or non-NaN for mirr) values.
+	includeCash := !(n.Cash == 0 && p.Cash == 0 && e.Cash == 0)
+	includeDuration := !(n.Duration == 0 && p.Duration == 0 && e.Duration == 0)
+	includeNpv := !(n.Npv == 0 && p.Npv == 0 && e.Npv == 0)
+	includeMirr := true
+	// For mirr, note that the node row is always blank so we check past and future.
+	if (math.IsNaN(p.Mirr) || p.Mirr == 0) && (math.IsNaN(e.Mirr) || e.Mirr == 0) {
+		includeMirr = false
+	}
+
+	// Build header and rows based on the metrics to include.
+	var headers []string
+	var nodeFields []string
+	var pastFields []string
+	var futureFields []string
+
+	if includeCash {
+		headers = append(headers, "cash")
+		nodeFields = append(nodeFields, form(n.Cash))
+		pastFields = append(pastFields, form(p.Cash))
+		futureFields = append(futureFields, form(e.Cash))
+	}
+	if includeDuration {
+		headers = append(headers, "duration")
+		nodeFields = append(nodeFields, days(n.Duration))
+		pastFields = append(pastFields, days(p.Duration))
+		futureFields = append(futureFields, days(e.Duration))
+	}
+	if includeNpv {
+		headers = append(headers, "npv")
+		nodeFields = append(nodeFields, form(n.Npv))
+		pastFields = append(pastFields, form(p.Npv))
+		futureFields = append(futureFields, form(e.Npv))
+	}
+	if includeMirr {
+		headers = append(headers, "mirr")
+		// No mirr in node row.
+		nodeFields = append(nodeFields, "")
+		pastFields = append(pastFields, Spf("%.1f%%", p.Mirr))
+		futureFields = append(futureFields, Spf("%.1f%%", e.Mirr))
+	}
+
+	// Create label parts.
+	headerRow := strings.Join(headers, "|")
+	nodeRow := Spf("node     | %s", strings.Join(nodeFields, " | "))
+	pastRow := Spf("past     | %s", strings.Join(pastFields, " | "))
+	futureRow := Spf("future   | %s", strings.Join(futureFields, " | "))
 
 	// put it all together
-	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
+	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
 	gvparent.SetLabel(label)
+
 	for _, child := range a.Children {
 		gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 		Ck(err)
 		edge, err := graph.CreateEdge("", gvparent, gvchild)
 		Ck(err)
 		edge.SetLabel(Spf("%.2f", child.Prob))
-		edge.SetPenWidth(math.Pow(child.Prob+.1, .5)*10)
+		edge.SetPenWidth(math.Pow(child.Prob+.1, .5) * 10)
 	}
 	return
 }
 
-------------------------------------------------------------
+func getMirrs(as []*Ast) (lo, hi float64) {
+	lo = math.MaxFloat64
+	hi = math.MaxFloat64 * -1
+	Assert(!math.IsInf(lo, 0), lo)
+	Assert(!math.IsInf(hi, 0), hi)
+	for _, a := range as {
+		var children []*Ast
+		for _, c := range a.Children {
+			children = append(children, c)
+		}
+		clo, chi := getMirrs(children)
+		if !math.IsNaN(clo) {
+			lo = math.Min(lo, clo)
+		}
+		if !math.IsNaN(chi) {
+			hi = math.Max(hi, chi)
+		}
+		mirr := a.Expected.Mirr
+		if !math.IsNaN(mirr) && !math.IsInf(mirr, 0) {
+			lo = math.Min(lo, mirr)
+			hi = math.Max(hi, mirr)
+		}
+	}
+	Assert(!math.IsInf(lo, 0), lo)
+	Assert(!math.IsInf(hi, 0), hi)
+	Assert(!math.IsNaN(lo), lo)
+	Assert(!math.IsNaN(hi), hi)
+	return
+}
 
-With this change, if a node’s timeline is late (and Expected.Mirr is NaN), then the dot function simply skips the MIRR normalization and uses default colors. This prevents the assertion failure and allows the graph to be generated, while still issuing a warning that the node is late.
+func Recalc(roots []*Ast, now time.Time, warn Warn) {
 
-An alternative fix would be to change the behavior in Forward so that a late node gets a “sentinel” MIRR value (say 0 or a flag value) instead of NaN, and then decorate the output accordingly. Either way, the idea is to avoid comparing NaN values when generating the graph.
+	// sum up Cash and Duration
+	for _, root := range roots {
+		root.Forward(nil, now, warn)
+	}
+
+	// calculate expected values
+	for _, root := range roots {
+		root.Backward(warn)
+	}
+}
+
+func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
+
+	loMirr, hiMirr := getMirrs(roots)
+	// Pl(loMirr, hiMirr)
+
+	g := graphviz.New()
+	graph, err := g.Graph()
+	Ck(err)
+	defer func() {
+		err := graph.Close()
+		Ck(err)
+		g.Close()
+	}()
+
+	if tb {
+		graph.SetRankDir("TB")
+	} else {
+		graph.SetRankDir("LR")
+	}
+
+	for _, root := range roots {
+		root.Dot(graph, loMirr, hiMirr, warn)
+	}
+
+	var dotbuf bytes.Buffer
+	err = g.Render(graph, "dot", &dotbuf)
+	Ck(err)
+
+	buf = dotbuf.Bytes()
+	return
+}
+
+func CatExample(fs embed.FS, src string) (buf []byte, err error) {
+	defer Return(&err)
+	parts := strings.Split(src, ":")
+	Assert(len(parts) == 2, "invalid example name: %s", src)
+	name := parts[1]
+	buf, err = fs.ReadFile(Spf("examples/%s.yaml", name))
+	Ck(err)
+	return
+}
+
+func LsExamples(fs embed.FS) (out string) {
+	files, err := fs.ReadDir("examples")
+	if err != nil || len(files) == 0 {
+		return
+	}
+	out = "Examples available:\n\n"
+	re := regexp.MustCompile(`(.*)\.yaml`)
+	for _, f := range files {
+		fn := f.Name()
+		m := re.FindStringSubmatch(fn)
+		if len(m) < 2 {
+			continue
+		}
+		name := m[1]
+		buf, err := fs.ReadFile(Spf("examples/%s", fn))
+		Ck(err)
+		lines := strings.Split(string(buf), "\n")
+		var desc string
+		if len(lines) > 0 && strings.HasPrefix(lines[0], "#") {
+			desc = lines[0]
+		}
+		out += Spf("\t\texample:%-15s%s\n", name, desc)
+	}
+	return
+}
+```
+EOF_/home/stevegt/lab/godecide/tree/godecide.go

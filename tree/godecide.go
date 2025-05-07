@@ -245,9 +245,9 @@ func days(d time.Duration) string {
 	return Spf("%.0f days", float64(d)/float64(24*time.Hour))
 }
 
-// Dot adds a record-shaped node to the graphviz graph for Ast node p
-// (parent), and adds a graphviz edge from p to each of the children
-// of p.
+// Dot adds a record-shaped node to the graphviz graph for Ast node a
+// (parent), and adds a graphviz edge from a to each of the children
+// of a.
 func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 
@@ -255,7 +255,6 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	Ck(err)
 
 	gvparent.SetShape("record")
-
 	gvparent.SetStyle("filled")
 	mirr := a.Expected.Mirr
 	var hue, value float64
@@ -297,20 +296,67 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 			gvparent.SetFillColor("0.0 0.0 0.3")
 		}
 	}
-	// row headings
-	head := "             |cash|duration|npv    |mirr  "
 
-	// columns
+	// Prepare dynamic table columns: cash, duration, npv, mirr.
 	n := a.Node
 	p := a.Path
 	e := a.Expected
-	node := Spf("node     | %s | %s     | %s    |      ", form(n.Cash), days(n.Duration), form(n.Npv))
-	path := Spf("past     | %s | %s     | %s    |%.1f%% ", form(p.Cash), days(p.Duration), form(p.Npv), p.Mirr)
-	expe := Spf("future   | %s | %s     | %s    |%.1f%% ", form(e.Cash), days(e.Duration), form(e.Npv), e.Mirr)
+
+	// Determine which metrics have non-zero (or non-NaN for mirr) values.
+	includeCash := !(n.Cash == 0 && p.Cash == 0 && e.Cash == 0)
+	includeDuration := !(n.Duration == 0 && p.Duration == 0 && e.Duration == 0)
+	includeNpv := !(n.Npv == 0 && p.Npv == 0 && e.Npv == 0)
+	includeMirr := true
+	// For mirr, note that the node row is always blank so we check past and future.
+	if (math.IsNaN(p.Mirr) || p.Mirr == 0) && (math.IsNaN(e.Mirr) || e.Mirr == 0) {
+		includeMirr = false
+	}
+
+	// Build header and rows based on the metrics to include.
+	var headers []string
+	var nodeFields []string
+	var pastFields []string
+	var futureFields []string
+
+	// top left cell is always blank
+	headers = append(headers, "")
+
+	if includeCash {
+		headers = append(headers, "cash")
+		nodeFields = append(nodeFields, form(n.Cash))
+		pastFields = append(pastFields, form(p.Cash))
+		futureFields = append(futureFields, form(e.Cash))
+	}
+	if includeDuration {
+		headers = append(headers, "duration")
+		nodeFields = append(nodeFields, days(n.Duration))
+		pastFields = append(pastFields, days(p.Duration))
+		futureFields = append(futureFields, days(e.Duration))
+	}
+	if includeNpv {
+		headers = append(headers, "npv")
+		nodeFields = append(nodeFields, form(n.Npv))
+		pastFields = append(pastFields, form(p.Npv))
+		futureFields = append(futureFields, form(e.Npv))
+	}
+	if includeMirr {
+		headers = append(headers, "mirr")
+		// No mirr in node row.
+		nodeFields = append(nodeFields, "")
+		pastFields = append(pastFields, Spf("%.1f%%", p.Mirr))
+		futureFields = append(futureFields, Spf("%.1f%%", e.Mirr))
+	}
+
+	// Create label parts.
+	headerRow := strings.Join(headers, "|")
+	nodeRow := Spf("node     | %s", strings.Join(nodeFields, " | "))
+	pastRow := Spf("past     | %s", strings.Join(pastFields, " | "))
+	futureRow := Spf("future   | %s", strings.Join(futureFields, " | "))
 
 	// put it all together
-	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, head, node, path, expe)
+	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
 	gvparent.SetLabel(label)
+
 	for _, child := range a.Children {
 		gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 		Ck(err)
