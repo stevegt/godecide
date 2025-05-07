@@ -1,7 +1,29 @@
-add --now flag
+analyze due dates failure 
 
-Add a --now flag to allow setting the 'now' variable to a timestamp
-other than the current time. 
+The graph generation fails if the due date is in the past.  Figure out
+why this is happening and recommend a fix.
+
+The bad generated output looks like this:
+
+go run main.go -now 2022-05-07T14:58:07-07:00 example:duedates stdout
+late: bar end 2022-07-26 14:58:07 -0700 PDT due 2022-04-15 00:00:00 +0000 UTC
+normalizing path probabilities: foo
+Dot apple
+digraph "" {
+        graph [bb="0,0,99.215,37",
+                rankdir=LR
+        ];
+        node [label="\N",
+                shape=ellipse
+        ];
+        "0xc000198000"   [height=0.51389,
+                pos="49.607,18.5",
+                rects="0,0.7,99.215,36.5",
+                shape=record,
+                style=filled,
+                width=1.378];
+}
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -13,12 +35,16 @@ Sysmsg:
   incorrect or misleading.  
   
 In: 
+    tree/godecide.go
     main.go
-Out: 
-    main.go
+    /tmp/duedates
 
 
 .stop
+
+Out: 
+    main.go
+    tree/godecide.go
 
     Makefile
     README.md

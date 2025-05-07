@@ -250,6 +250,7 @@ func days(d time.Duration) string {
 // of p.
 func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
+
 	gvparent, err = graph.CreateNode(Spf("%p", a))
 	Ck(err)
 
@@ -257,21 +258,28 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 
 	gvparent.SetStyle("filled")
 	mirr := a.Expected.Mirr
-	Assert(mirr >= loMirr, mirr)
-	Assert(mirr <= hiMirr, mirr)
 	var hue, value float64
 	if math.IsNaN(mirr) || math.IsInf(mirr, 0) {
 		gvparent.SetFillColor("white")
 	} else {
-		// hue := 120 / 360.0 * (mirr - loMirr) / float64(hiMirr-loMirr)
-		if mirr > 0 {
+		switch {
+		case math.IsNaN(mirr):
+			warn("NaN mirr %f\n", mirr)
+			hue = 0
+			value = 0.4
+		case mirr < loMirr:
+			fallthrough
+		case mirr > hiMirr:
+			warn("lomirr %f mirr %f himirr %f\n", loMirr, mirr, hiMirr)
+			hue = 0
+			value = 0.4
+		case mirr > 0:
 			hue = 20/360.0 + 100/360.0*(mirr-0)/(hiMirr-0)
 			value = math.Max(0.4, mirr/hiMirr)
-		} else {
+		default:
 			hue = 60 / 360.0 * (mirr - loMirr) / math.Abs(loMirr)
 			value = math.Max(0.4, (0-mirr)/(0-loMirr))
 		}
-		// Pl(hue, mirr, loMirr, hiMirr, (mirr - loMirr), float64(hiMirr-loMirr))
 		if math.IsNaN(hue) {
 			warn("hue NaN %f %f %f\n", loMirr, hiMirr, mirr)
 			hue = 0
