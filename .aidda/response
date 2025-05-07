@@ -1,3 +1,5 @@
+File: /home/stevegt/lab/godecide/main.go
+```go
 package main
 
 import (
@@ -18,7 +20,7 @@ import (
 //go:embed examples/*.yaml
 var fs embed.FS
 
-var usage string = `Usage: %s [-tb -now=<RFC3339 timestamp>] {src} {dst}
+var usage string = `Usage: %s [-tb --now=<RFC3339 timestamp>] {src} {dst}
 
 src: either 'stdin', 'example:NAME', or a filename
 dst: either (stdout|xdot|yaml) or a filename
@@ -26,8 +28,6 @@ dst: either (stdout|xdot|yaml) or a filename
 %s
 
 e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
-
-For the -now flag, the default is the current time.
 
 `
 
@@ -41,9 +41,9 @@ func main() {
 
 	// parse flags
 	var tb bool
-	nowStr := time.Now().Format(time.RFC3339)
+	var nowStr string
 	flag.BoolVar(&tb, "tb", false, "set graphviz rankdir=TB (top to bottom)")
-	flag.StringVar(&nowStr, "now", nowStr, "set timestamp (in RFC3339 format) for current time")
+	flag.StringVar(&nowStr, "now", "", "set timestamp (in RFC3339 format) for now variable")
 	flag.Parse()
 
 	if flag.NArg() != 2 {
@@ -51,14 +51,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	now, err := time.Parse(time.RFC3339, nowStr)
-	Ck(err)
+	var now time.Time
+	if nowStr != "" {
+		var err error
+		now, err = time.Parse(time.RFC3339, nowStr)
+		Ck(err)
+	} else {
+		now = time.Now()
+	}
 
 	// get src and dst
 	src := flag.Arg(0)
 	dst := flag.Arg(1)
 
 	var buf []byte
+	var err error
 
 	// get input
 	switch {
@@ -135,3 +142,5 @@ func formatArgs(args ...interface{}) (msg string) {
 	}
 	return
 }
+```
+EOF_/home/stevegt/lab/godecide/main.go

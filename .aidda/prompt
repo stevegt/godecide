@@ -1,4 +1,7 @@
-# write commit message here -- it will be used as the LLM prompt
+add --now flag
+
+Add a --now flag to allow setting the 'now' variable to a timestamp
+other than the current time. 
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -9,28 +12,14 @@ Sysmsg:
   string literals.  Do not remove or alter comments unless they are
   incorrect or misleading.  
   
-In: LICENSE
-    Makefile
-    README.md
-    examples/college.yaml
-    examples/duedates.yaml
-    examples/hbr.yaml
-    examples/loop.sh
-    fin/README.md
-    fin/fin.go
-    fin/fin_test.go
-    fin/testdata/expand-lowavg.yaml
-    fin/testdata/wikipedia.yaml
-    local/Decision Trees for Decision Making.pdf
-    local/gdo/gdo.yaml
-    local/gdo/main.go
-    local/targets/main.go
-    local/targets/pres.yaml
-    local/targets/targets.CSV
-    local/todo.yaml
+In: 
     main.go
-    tree/godecide.go
-Out: LICENSE
+Out: 
+    main.go
+
+
+.stop
+
     Makefile
     README.md
     examples/college.yaml
