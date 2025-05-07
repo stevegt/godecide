@@ -1,0 +1,53 @@
+# write commit message here -- it will be used as the LLM prompt
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. Please verify that the code
+  compiles and runs without errors -- do not hallucinate library
+  methods, structs, or functions that do not exist. Do not quote or
+  escape single backticks in the code -- Go uses backticks for raw
+  string literals.  Do not remove or alter comments unless they are
+  incorrect or misleading.  
+  
+In: LICENSE
+    Makefile
+    README.md
+    examples/college.yaml
+    examples/duedates.yaml
+    examples/hbr.yaml
+    examples/loop.sh
+    fin/README.md
+    fin/fin.go
+    fin/fin_test.go
+    fin/testdata/expand-lowavg.yaml
+    fin/testdata/wikipedia.yaml
+    local/Decision Trees for Decision Making.pdf
+    local/gdo/gdo.yaml
+    local/gdo/main.go
+    local/targets/main.go
+    local/targets/pres.yaml
+    local/targets/targets.CSV
+    local/todo.yaml
+    main.go
+    tree/godecide.go
+Out: LICENSE
+    Makefile
+    README.md
+    examples/college.yaml
+    examples/duedates.yaml
+    examples/hbr.yaml
+    examples/loop.sh
+    fin/README.md
+    fin/fin.go
+    fin/fin_test.go
+    fin/testdata/expand-lowavg.yaml
+    fin/testdata/wikipedia.yaml
+    local/Decision Trees for Decision Making.pdf
+    local/gdo/gdo.yaml
+    local/gdo/main.go
+    local/targets/main.go
+    local/targets/pres.yaml
+    local/targets/targets.CSV
+    local/todo.yaml
+    main.go
+    tree/godecide.go

@@ -19,16 +19,15 @@ import (
 var fs embed.FS
 
 var usage string = `Usage: %s [-tb] {src} {dst}
-	src: either 'stdin', 'example:NAME', or a filename
-	dst: either (stdout|xdot|yaml) or a filename
 
-	-tb:  set graphviz rankdir=TB (top to bottom)
+src: either 'stdin', 'example:NAME', or a filename
+dst: either (stdout|xdot|yaml) or a filename
 
-	Examples:
+%s
 
-	e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
+e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
 
-	%s`
+`
 
 func main() {
 	now := time.Now()
@@ -36,6 +35,8 @@ func main() {
 	// set custom usage
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0], tree.LsExamples(fs))
+		fmt.Fprint(os.Stderr, "Flags:\n\n")
+		flag.PrintDefaults()
 	}
 
 	// parse flags

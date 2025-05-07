@@ -11,12 +11,29 @@ college:
     business: .33
 
 business:
-  desc: own business,\nclasses as needed, degree optional 
+  desc: start own business,\nclasses as needed, degree optional 
   cash: -5000
   days: 365
   repeat: 2
   paths:
+    grow: .1
+    fail: .9
+
+grow:
+  desc: business grows
+  cash: 50000
+  days: 365
+  repeat: 2
+  paths:
     fine: 1
+
+fail:
+  desc: business fails
+  cash: -50000
+  days: 180
+  paths:
+    remote: .5
+    campus: .5
 
 remote:
   desc: degree via remote
@@ -46,7 +63,7 @@ covid:
   cash: -5000
   days: 30
   paths:
-    long: .25
+    long: .05
     fine: .75
 
 long:
