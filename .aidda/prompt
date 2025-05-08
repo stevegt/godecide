@@ -1,8 +1,7 @@
-don't render node rows that are zero-valued
+color critical path arrows red 
 
-When rendering nodes in dot format, don't render rows in which all
-columns are zero-valued.  For example, don't render the "cash" row if
-it is all zeros, the NPV or MIRR row if it is all zeros or NaN, etc.
+For each node, find the child node that leads to the longest path in
+terms of day count, and color that edge arrow red.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

@@ -357,6 +357,19 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
 	gvparent.SetLabel(label)
 
+	// Determine the critical child based on the longest path (in days)
+	var criticalChild *Ast
+	var maxExtra time.Duration
+	for _, child := range a.Children {
+		// extra duration from this node to the end of child's path
+		extra := child.Path.Duration - a.Path.Duration
+		if extra > maxExtra {
+			maxExtra = extra
+			criticalChild = child
+		}
+	}
+
+	// Create edges for each child, coloring the edge red if it is the critical path
 	for _, child := range a.Children {
 		gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 		Ck(err)
@@ -364,6 +377,9 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 		Ck(err)
 		edge.SetLabel(Spf("%.2f", child.Prob))
 		edge.SetPenWidth(math.Pow(child.Prob+.1, .5) * 10)
+		if child == criticalChild {
+			edge.SetColor("red")
+		}
 	}
 	return
 }
