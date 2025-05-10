@@ -3,6 +3,10 @@ package tree
 import (
 	"embed"
 	"fmt"
+
+	// "io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -133,6 +137,111 @@ func TestLsExamples(t *testing.T) {
 	// Check that the output lists known example names, e.g. college.
 	if !strings.Contains(out, "example:college") {
 		t.Error("LsExamples output does not list 'example:college'")
+	}
+}
+
+func TestToYAML(t *testing.T) {
+	// Test the Nodes.ToYAML function using the college example.
+	data, err := testFS.ReadFile("examples/college.yaml")
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	var nodes Nodes
+	err = yaml.Unmarshal(data, &nodes)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	yamlOut, err := nodes.ToYAML()
+	if err != nil {
+		t.Fatalf("ToYAML failed: %v", err)
+	}
+	// Unmarshal the produced YAML back into a map and compare keys.
+	var nodes2 Nodes
+	err = yaml.Unmarshal(yamlOut, &nodes2)
+	if err != nil {
+		t.Fatalf("Unmarshal of YAML output failed: %v", err)
+	}
+	if len(nodes) != len(nodes2) {
+		t.Errorf("Expected same number of nodes, got %d and %d", len(nodes), len(nodes2))
+	}
+}
+
+func TestRootNodes(t *testing.T) {
+	// Test the RootNodes method using the college example.
+	data, err := testFS.ReadFile("examples/college.yaml")
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	var nodes Nodes
+	err = yaml.Unmarshal(data, &nodes)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	roots := nodes.RootNodes()
+	if len(roots) == 0 {
+		t.Error("No root nodes found")
+	}
+	// Verify that none of the returned root nodes appear as children.
+	for _, node := range nodes {
+		for child := range node.Paths {
+			if _, ok := roots[child]; ok {
+				t.Errorf("Child node %s found in root nodes", child)
+			}
+		}
+	}
+}
+
+func TestGenerateOutputFiles(t *testing.T) {
+	// This test compares the generated DOT output from example YAML files with expected output files.
+	// If the environment variable GEN_TEST_OUTPUT is set (to any non-empty value), then the expected
+	// output files are generated/updated in the testdata directory.
+	genOutput := os.Getenv("GEN_TEST_OUTPUT")
+	exampleFiles := []string{"college.yaml", "duedates.yaml", "hbr.yaml"}
+
+	// Ensure testdata directory exists.
+	err := os.MkdirAll("testdata", 0755)
+	if err != nil {
+		t.Fatalf("Failed to create testdata directory: %v", err)
+	}
+
+	for _, fname := range exampleFiles {
+		data, err := testFS.ReadFile("examples/" + fname)
+		if err != nil {
+			t.Errorf("ReadFile for %s failed: %v", fname, err)
+			continue
+		}
+		roots, err := FromYAML(data)
+		if err != nil {
+			t.Errorf("FromYAML for %s failed: %v", fname, err)
+			continue
+		}
+		// Use a fixed time stamp for reproducibility.
+		now := time.Date(2023, time.January, 1, 9, 0, 0, 0, time.UTC)
+		Recalc(roots, now, testWarn(t))
+		dotBytes := ToDot(roots, testWarn(t), false)
+
+		expectedFile := filepath.Join("testdata", strings.TrimSuffix(fname, ".yaml")+".dot")
+		if genOutput != "" {
+			err = os.WriteFile(expectedFile, dotBytes, 0644)
+			if err != nil {
+				t.Errorf("Failed to write expected output file %s: %v", expectedFile, err)
+			} else {
+				t.Logf("Generated output file: %s", expectedFile)
+			}
+		} else {
+			expected, err := os.ReadFile(expectedFile)
+			if err != nil {
+				// If expected file does not exist, indicate to generate it.
+				t.Errorf("Failed to read expected output %s: %v", expectedFile, err)
+				continue
+			}
+			// Normalize whitespace for comparison.
+			genStr := strings.TrimSpace(string(dotBytes))
+			expStr := strings.TrimSpace(string(expected))
+			if genStr != expStr {
+				t.Errorf("DOT output for %s does not match expected output", fname)
+			}
+		}
 	}
 }
 

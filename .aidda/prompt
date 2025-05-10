@@ -1,7 +1,10 @@
 write test cases 
 
-Write a suite of test cases for all of the functions in godecide.go.
-Use the built-in example files as test input data.
+Add more detailed test cases for all of the functions in godecide.go.
+- Use the built-in example files as test input data.
+- Add a flag or environment variable that causes the generation of
+  example output files in the testdata directory. 
+- Use the example output files as the expected output for the tests.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -12,12 +15,15 @@ Sysmsg:
   string literals.  Do not remove or alter comments unless they are
   incorrect or misleading.  
 In: 
-    tree/godecide.go
-    tree/examples/college.yaml
-    tree/examples/duedates.yaml
-    tree/examples/hbr.yaml
+    cmd/godecide/main.go
+    godecide.go
+    godecide_test.go
+    examples/college.yaml
+    examples/duedates.yaml
+    examples/hbr.yaml
 Out:
-    tree/godecide_test.go
+    cmd/godecide/main.go
+    godecide_test.go
 
 
 .stop

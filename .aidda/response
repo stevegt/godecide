@@ -1,20 +1,166 @@
-File: /home/stevegt/lab/godecide/tree/godecide_test.go
+File: /home/stevegt/lab/godecide/cmd/godecide/main.go
+```go
+package main
+
+import (
+	"embed"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
+	"time"
+
+	. "github.com/stevegt/goadapt"
+	tree "github.com/stevegt/godecide"
+)
+
+//go:embed tree/examples/*.yaml
+var fs embed.FS
+
+var usage string = `Usage: %s [-tb -now=<RFC3339 timestamp>] {src} {dst}
+
+src: either 'stdin', 'example:NAME', or a filename
+dst: either (stdout|xdot|yaml) or a filename
+
+%s
+
+e.g.:  'godecide example:hbr xdot' runs xdot with the hbr example 
+
+For the -now flag, the default is the current time.
+
+`
+
+func main() {
+	// set custom usage
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, usage, os.Args[0], tree.LsExamples(fs))
+		fmt.Fprint(os.Stderr, "Flags:\n\n")
+		flag.PrintDefaults()
+	}
+
+	// parse flags
+	var tb bool
+	nowStr := time.Now().Format(time.RFC3339)
+	flag.BoolVar(&tb, "tb", false, "set graphviz rankdir=TB (top to bottom)")
+	flag.StringVar(&nowStr, "now", nowStr, "set timestamp (in RFC3339 format) for current time")
+	flag.Parse()
+
+	if flag.NArg() != 2 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	now, err := time.Parse(time.RFC3339, nowStr)
+	Ck(err)
+
+	// get src and dst
+	src := flag.Arg(0)
+	dst := flag.Arg(1)
+
+	var buf []byte
+
+	// get input
+	switch {
+	case strings.HasPrefix(src, "example:"):
+		buf, err = tree.CatExample(fs, src)
+		Ck(err)
+	case src == "stdin":
+		buf, err = ioutil.ReadAll(os.Stdin)
+		Ck(err)
+	default:
+		buf, err = ioutil.ReadFile(src)
+		Ck(err)
+	}
+
+	// parse
+	roots, err := tree.FromYAML(buf)
+	Ck(err)
+
+	tree.Recalc(roots, now, warn)
+
+	dotbuf := tree.ToDot(roots, warn, tb)
+
+	switch dst {
+	case "stdout":
+		fmt.Print(string(dotbuf))
+	case "yaml":
+		fmt.Print(string(buf))
+	case "xdot":
+		tmpfile, err := ioutil.TempFile("/tmp", "godecide.*.dot")
+		Ck(err)
+		defer os.Remove(tmpfile.Name())
+		_, err = tmpfile.Write(dotbuf)
+		Ck(err)
+		err = tmpfile.Close()
+		Ck(err)
+		cmd := exec.Command("xdot", tmpfile.Name())
+		err = cmd.Run()
+		Ck(err)
+	default:
+		fh, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if err != nil {
+			// backup existing dst file
+			bakfn := Spf("%s-*.dot", path.Base(dst))
+			bakfh, err := ioutil.TempFile("/tmp", bakfn)
+			Ck(err)
+			bakbuf, err := ioutil.ReadFile(dst)
+			Ck(err)
+			_, err = bakfh.Write(bakbuf)
+			Ck(err)
+			err = bakfh.Close()
+			Ck(err)
+			fh, err = os.OpenFile(dst, os.O_WRONLY|os.O_TRUNC, 0644)
+			Ck(err)
+		}
+		_, err = fh.Write(dotbuf)
+		Ck(err)
+		err = fh.Close()
+		Ck(err)
+	}
+	return
+}
+
+func warn(args ...interface{}) {
+	msg := formatArgs(args...)
+	fmt.Fprintf(os.Stderr, msg)
+}
+
+func formatArgs(args ...interface{}) (msg string) {
+	if len(args) == 1 {
+		msg = fmt.Sprintf("%v", args[0])
+	}
+	if len(args) > 1 {
+		msg = fmt.Sprintf(args[0].(string), args[1:]...)
+	}
+	return
+}
+```
+EOF_/home/stevegt/lab/godecide/cmd/godecide/main.go
+
+File: /home/stevegt/lab/godecide/godecide_test.go
 ```go
 package tree
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
-	"math"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 // Use embed to load example YAML files.
 // The examples directory is one level up from the tree directory.
-	//go:embed ../examples/*.yaml
+//
+//go:embed examples/*.yaml
 var testFS embed.FS
 
 // testWarn returns a Warn function for testing that logs warnings via t.Log.
@@ -31,7 +177,7 @@ func testWarn(t *testing.T) Warn {
 
 func TestFromYAML(t *testing.T) {
 	// Read one of the example files: college.yaml
-	data, err := testFS.ReadFile("../examples/college.yaml")
+	data, err := testFS.ReadFile("examples/college.yaml")
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
@@ -55,43 +201,9 @@ func TestFromYAML(t *testing.T) {
 	}
 }
 
-func TestToYAML(t *testing.T) {
-	// Read the duedates example file.
-	data, err := testFS.ReadFile("../examples/duedates.yaml")
-	if err != nil {
-		t.Fatalf("ReadFile failed: %v", err)
-	}
-	// Parse using FromYAML.
-	roots, err := FromYAML(data)
-	if err != nil {
-		t.Fatalf("FromYAML failed: %v", err)
-	}
-	// Reconstruct the original nodes map by converting ASTs back to Nodes.
-	// For testing purposes, we can use the fact that FromYAML marshaled the original map.
-	// Instead, call ToYAML on the original YAML nodes.
-	var nodes Nodes
-	err = YAMLUnmarshal(data, &nodes)
-	if err != nil {
-		t.Fatalf("Unmarshal into Nodes failed: %v", err)
-	}
-	out, err := nodes.ToYAML()
-	if err != nil {
-		t.Fatalf("ToYAML failed: %v", err)
-	}
-	if len(out) == 0 {
-		t.Error("ToYAML produced empty output")
-	}
-	// Re-unmarshal the output to check it is valid YAML.
-	var nodes2 Nodes
-	err = YAMLUnmarshal(out, &nodes2)
-	if err != nil {
-		t.Fatalf("Re-unmarshal of ToYAML output failed: %v", err)
-	}
-}
-
 func TestRecalcAndForwardBackward(t *testing.T) {
 	// Use the hbr example to test recalculation.
-	data, err := testFS.ReadFile("../examples/hbr.yaml")
+	data, err := testFS.ReadFile("examples/hbr.yaml")
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
@@ -108,8 +220,8 @@ func TestRecalcAndForwardBackward(t *testing.T) {
 		if a.Start.Before(now) {
 			t.Errorf("Node %s: start time %v is before now %v", a.Name, a.Start, now)
 		}
-		if !a.End.After(a.Start) {
-			t.Errorf("Node %s: end time %v is not after start time %v", a.Name, a.End, a.Start)
+		if a.End.Before(a.Start) {
+			t.Errorf("Node %s: end time %v is before start time %v", a.Name, a.End, a.Start)
 		}
 		// Also check that expected values for leaf nodes have been set.
 		if len(a.Hyperedges) == 0 {
@@ -122,7 +234,7 @@ func TestRecalcAndForwardBackward(t *testing.T) {
 
 func TestToDot(t *testing.T) {
 	// Use the college example to test DOT generation.
-	data, err := testFS.ReadFile("../examples/college.yaml")
+	data, err := testFS.ReadFile("examples/college.yaml")
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
@@ -171,6 +283,111 @@ func TestLsExamples(t *testing.T) {
 	}
 }
 
+func TestToYAML(t *testing.T) {
+	// Test the Nodes.ToYAML function using the college example.
+	data, err := testFS.ReadFile("examples/college.yaml")
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	var nodes Nodes
+	err = yaml.Unmarshal(data, &nodes)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	yamlOut, err := nodes.ToYAML()
+	if err != nil {
+		t.Fatalf("ToYAML failed: %v", err)
+	}
+	// Unmarshal the produced YAML back into a map and compare keys.
+	var nodes2 Nodes
+	err = yaml.Unmarshal(yamlOut, &nodes2)
+	if err != nil {
+		t.Fatalf("Unmarshal of YAML output failed: %v", err)
+	}
+	if len(nodes) != len(nodes2) {
+		t.Errorf("Expected same number of nodes, got %d and %d", len(nodes), len(nodes2))
+	}
+}
+
+func TestRootNodes(t *testing.T) {
+	// Test the RootNodes method using the college example.
+	data, err := testFS.ReadFile("examples/college.yaml")
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	var nodes Nodes
+	err = yaml.Unmarshal(data, &nodes)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	roots := nodes.RootNodes()
+	if len(roots) == 0 {
+		t.Error("No root nodes found")
+	}
+	// Verify that none of the returned root nodes appear as children.
+	for _, node := range nodes {
+		for child := range node.Paths {
+			if _, ok := roots[child]; ok {
+				t.Errorf("Child node %s found in root nodes", child)
+			}
+		}
+	}
+}
+
+func TestGenerateOutputFiles(t *testing.T) {
+	// This test compares the generated DOT output from example YAML files with expected output files.
+	// If the environment variable GEN_TEST_OUTPUT is set (to any non-empty value), then the expected
+	// output files are generated/updated in the testdata directory.
+	genOutput := os.Getenv("GEN_TEST_OUTPUT")
+	exampleFiles := []string{"college.yaml", "duedates.yaml", "hbr.yaml"}
+
+	// Ensure testdata directory exists.
+	err := os.MkdirAll("testdata", 0755)
+	if err != nil {
+		t.Fatalf("Failed to create testdata directory: %v", err)
+	}
+
+	for _, fname := range exampleFiles {
+		data, err := testFS.ReadFile("examples/" + fname)
+		if err != nil {
+			t.Errorf("ReadFile for %s failed: %v", fname, err)
+			continue
+		}
+		roots, err := FromYAML(data)
+		if err != nil {
+			t.Errorf("FromYAML for %s failed: %v", fname, err)
+			continue
+		}
+		// Use a fixed time stamp for reproducibility.
+		now := time.Date(2023, time.January, 1, 9, 0, 0, 0, time.UTC)
+		Recalc(roots, now, testWarn(t))
+		dotBytes := ToDot(roots, testWarn(t), false)
+
+		expectedFile := filepath.Join("testdata", strings.TrimSuffix(fname, ".yaml")+".dot")
+		if genOutput != "" {
+			err = os.WriteFile(expectedFile, dotBytes, 0644)
+			if err != nil {
+				t.Errorf("Failed to write expected output file %s: %v", expectedFile, err)
+			} else {
+				t.Logf("Generated output file: %s", expectedFile)
+			}
+		} else {
+			expected, err := os.ReadFile(expectedFile)
+			if err != nil {
+				// If expected file does not exist, indicate to generate it.
+				t.Errorf("Failed to read expected output %s: %v", expectedFile, err)
+				continue
+			}
+			// Normalize whitespace for comparison.
+			genStr := strings.TrimSpace(string(dotBytes))
+			expStr := strings.TrimSpace(string(expected))
+			if genStr != expStr {
+				t.Errorf("DOT output for %s does not match expected output", fname)
+			}
+		}
+	}
+}
+
 // YAMLUnmarshal is a helper that wraps yaml.Unmarshal.
 // Since the godecide.go file uses gopkg.in/yaml.v2 and a dot-import for goadapt,
 // we provide a local helper here.
@@ -180,12 +397,9 @@ func YAMLUnmarshal(in []byte, out interface{}) error {
 	return yamlUnmarshal(in, out)
 }
 
-// To avoid collision with the dot-import in godecide.go, we alias the yaml package here.
-import yaml "gopkg.in/yaml.v2"
-
 // yamlUnmarshal is a simple wrapper for yaml.Unmarshal.
 func yamlUnmarshal(in []byte, out interface{}) error {
 	return yaml.Unmarshal(in, out)
 }
 ```
-EOF_/home/stevegt/lab/godecide/tree/godecide_test.go
+EOF_/home/stevegt/lab/godecide/godecide_test.go
