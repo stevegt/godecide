@@ -1,7 +1,110 @@
-color critical path arrows red 
+suggest child map fix
 
-For each node, find the child node that leads to the longest path in
-terms of day count, and color that edge arrow red.  
+Using probability as a map key in Ast.Children doesn't work because if
+two children have the same probability then they will overwrite each
+other.  
+
+We can fix this by using a slice of edges instead of a map.  Make the
+following changes to the Ast struct and the code that uses it, adding
+an Edge struct to represent the edges between nodes:
+
+type Ast struct {
+	Name     string
+	Desc     string
+	Repeat   int
+	FinRate  float64
+	ReRate   float64
+	Period   Stats
+	Node     Stats
+	Path     Stats
+	Expected Stats
+	Start    time.Time
+	End      time.Time
+	Due      time.Time
+	Timeline fin.Timeline
+	Parent   *Ast
+	Edges    []*Edge
+}
+
+type Edge struct {
+    Prob float64
+    Child *Ast
+}
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. Please verify that the code
+  compiles and runs without errors -- do not hallucinate library
+  methods, structs, or functions that do not exist. Do not quote or
+  escape single backticks in the code -- Go uses backticks for raw
+  string literals.  Do not remove or alter comments unless they are
+  incorrect or misleading.  
+  
+In: 
+    tree/godecide.go
+Out:
+    tree/godecide.go
+
+
+.stop
+
+
+create Edge struct
+
+We want multiple children to be able to share the same edge.  This means that
+we need a Hyperedge struct that contains a list of Children.  Move Ast.Prob
+and Ast.Children to the Hyperedge struct.  In other words:
+
+type Ast struct {
+	Name     string
+	Desc     string
+	Repeat   int
+	FinRate  float64
+	ReRate   float64
+	Period   Stats
+	Node     Stats
+	Path     Stats
+	Expected Stats
+	Start    time.Time
+	End      time.Time
+	Due      time.Time
+	Timeline fin.Timeline
+	Parent   *Ast
+	Edges    []*Edge
+}
+
+type Hyperedge struct {
+    Prob float64
+    Children map[string]*Ast
+}
+
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. Please verify that the code
+  compiles and runs without errors -- do not hallucinate library
+  methods, structs, or functions that do not exist. Do not quote or
+  escape single backticks in the code -- Go uses backticks for raw
+  string literals.  Do not remove or alter comments unless they are
+  incorrect or misleading.  
+  
+In: 
+    .aidda/response
+    tree/godecide.go
+Out:
+    tree/godecide.go
+
+
+.stop
+an edge should be a hyperedge
+
+Instead of a probability being applied to only one edge, it should be
+possible to apply a probability to a group of edges, effectively
+creating a hyperedge.
+
+The goal is to be able to support PERT-chart-like structures, where a node can
+have multiple parents and multiple children.
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

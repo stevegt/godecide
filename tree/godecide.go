@@ -48,7 +48,6 @@ type Ast struct {
 	Name     string
 	Desc     string
 	Repeat   int
-	Prob     float64
 	FinRate  float64
 	ReRate   float64
 	Period   Stats
@@ -60,7 +59,12 @@ type Ast struct {
 	Due      time.Time
 	Timeline fin.Timeline
 	Parent   *Ast
-	Children map[string]*Ast
+	Edges    []*Edge
+}
+
+type Edge struct {
+	Prob  float64
+	Child *Ast
 }
 
 func FromYAML(buf []byte) (roots []*Ast, err error) {
@@ -73,8 +77,8 @@ func FromYAML(buf []byte) (roots []*Ast, err error) {
 }
 
 func (nodes Nodes) ToAst() (roots []*Ast) {
-	for name, _ := range nodes.RootNodes() {
-		root := nodes.toAst(name, 1, nil)
+	for name := range nodes.RootNodes() {
+		root := nodes.toAst(name, nil)
 		roots = append(roots, root)
 	}
 	return
@@ -96,7 +100,7 @@ func (nodes Nodes) RootNodes() (rootnodes Nodes) {
 	}
 	// remove children from list
 	for _, parent := range nodes {
-		for child, _ := range parent.Paths {
+		for child := range parent.Paths {
 			delete(rootnodes, child)
 		}
 	}
@@ -118,7 +122,7 @@ func dieif(cond bool, args ...interface{}) {
 	os.Exit(1)
 }
 
-func (nodes Nodes) toAst(name string, prob float64, parent *Ast) (root *Ast) {
+func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 	node, ok := nodes[name]
 	dieif(!ok, "missing node: %s", name)
 
@@ -136,26 +140,30 @@ func (nodes Nodes) toAst(name string, prob float64, parent *Ast) (root *Ast) {
 	repeat := int(repeatrat.Num().Int64())
 	repeat = int(math.Max(1, float64(repeat)))
 
-	root = &Ast{
-		Name: name,
-		Desc: node.Desc,
+	nodeAst = &Ast{
+		Name:   name,
+		Desc:   node.Desc,
+		Repeat: repeat,
 		Period: Stats{
 			Cash:     cash,
 			Duration: time.Duration(days) * 24 * time.Hour,
 		},
-		Repeat:  repeat,
 		Due:     node.Due,
 		FinRate: node.FinRate,
 		ReRate:  node.ReRate,
-		Prob:    prob,
 		Parent:  parent,
 	}
-	root.Node.Cash = root.Period.Cash * float64(root.Repeat)
-	root.Node.Duration = root.Period.Duration * time.Duration(root.Repeat)
+	nodeAst.Node.Cash = nodeAst.Period.Cash * float64(nodeAst.Repeat)
+	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
 
-	root.Children = make(map[string]*Ast)
-	for childname, prob := range node.Paths {
-		root.Children[childname] = nodes.toAst(childname, prob, root)
+	nodeAst.Edges = make([]*Edge, 0)
+	// Build edges for each child from the YAML Paths map.
+	for childname, childProb := range node.Paths {
+		childAst := nodes.toAst(childname, nodeAst)
+		nodeAst.Edges = append(nodeAst.Edges, &Edge{
+			Prob:  childProb,
+			Child: childAst,
+		})
 	}
 	return
 }
@@ -201,31 +209,31 @@ func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
 		Pl()
 	*/
 
-	for _, child := range this.Children {
-		child.Forward(this, now, warn)
+	for _, edge := range this.Edges {
+		edge.Child.Forward(this, now, warn)
 	}
 }
 
 // calculate .Expected.*
 func (this *Ast) Backward(warn Warn) {
-	if len(this.Children) > 0 {
+	if len(this.Edges) > 0 {
 		// root or inner node
 		totalProb := 0.0
-		for _, child := range this.Children {
-			totalProb += child.Prob
+		for _, edge := range this.Edges {
+			totalProb += edge.Prob
 		}
 		if math.Abs(totalProb-1) > .001 {
 			warn("normalizing path probabilities: %s\n", this.Name)
-			for _, child := range this.Children {
-				child.Prob /= totalProb
+			for _, edge := range this.Edges {
+				edge.Prob /= totalProb
 			}
 		}
-		for _, child := range this.Children {
-			child.Backward(warn)
-			this.Expected.Cash += child.Expected.Cash * child.Prob
-			this.Expected.Duration += time.Duration(float64(child.Expected.Duration) * child.Prob)
-			this.Expected.Npv += child.Expected.Npv * child.Prob
-			this.Expected.Mirr += child.Expected.Mirr * child.Prob
+		for _, edge := range this.Edges {
+			edge.Child.Backward(warn)
+			this.Expected.Cash += edge.Child.Expected.Cash * edge.Prob
+			this.Expected.Duration += time.Duration(float64(edge.Child.Expected.Duration) * edge.Prob)
+			this.Expected.Npv += edge.Child.Expected.Npv * edge.Prob
+			this.Expected.Mirr += edge.Child.Expected.Mirr * edge.Prob
 		}
 	} else {
 		// leaf -- we fold the path stuff back into expected here, and only here
@@ -360,7 +368,8 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	// Determine the critical child based on the longest path (in days)
 	var criticalChild *Ast
 	var maxExtra time.Duration
-	for _, child := range a.Children {
+	for _, edge := range a.Edges {
+		child := edge.Child
 		// extra duration from this node to the end of child's path
 		extra := child.Path.Duration - a.Path.Duration
 		if extra > maxExtra {
@@ -370,15 +379,15 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	}
 
 	// Create edges for each child, coloring the edge red if it is the critical path
-	for _, child := range a.Children {
-		gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
+	for _, edge := range a.Edges {
+		gvchild, err := edge.Child.Dot(graph, loMirr, hiMirr, warn)
 		Ck(err)
-		edge, err := graph.CreateEdge("", gvparent, gvchild)
+		gvedge, err := graph.CreateEdge("", gvparent, gvchild)
 		Ck(err)
-		edge.SetLabel(Spf("%.2f", child.Prob))
-		edge.SetPenWidth(math.Pow(child.Prob+.1, .5) * 10)
-		if child == criticalChild {
-			edge.SetColor("red")
+		gvedge.SetLabel(Spf("%.2f", edge.Prob))
+		gvedge.SetPenWidth(math.Pow(edge.Prob+0.1, 0.5) * 10)
+		if edge.Child == criticalChild {
+			gvedge.SetColor("red")
 		}
 	}
 	return
@@ -391,8 +400,8 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 	Assert(!math.IsInf(hi, 0), hi)
 	for _, a := range as {
 		var children []*Ast
-		for _, c := range a.Children {
-			children = append(children, c)
+		for _, edge := range a.Edges {
+			children = append(children, edge.Child)
 		}
 		clo, chi := getMirrs(children)
 		if !math.IsNaN(clo) {
