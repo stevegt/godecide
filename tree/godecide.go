@@ -45,26 +45,26 @@ type Stats struct {
 }
 
 type Ast struct {
-	Name     string
-	Desc     string
-	Repeat   int
-	FinRate  float64
-	ReRate   float64
-	Period   Stats
-	Node     Stats
-	Path     Stats
-	Expected Stats
-	Start    time.Time
-	End      time.Time
-	Due      time.Time
-	Timeline fin.Timeline
-	Parent   *Ast
-	Edges    []*Edge
+	Name       string
+	Desc       string
+	Repeat     int
+	FinRate    float64
+	ReRate     float64
+	Period     Stats
+	Node       Stats
+	Path       Stats
+	Expected   Stats
+	Start      time.Time
+	End        time.Time
+	Due        time.Time
+	Timeline   fin.Timeline
+	Parent     *Ast
+	Hyperedges []*Hyperedge
 }
 
-type Edge struct {
-	Prob  float64
-	Child *Ast
+type Hyperedge struct {
+	Prob     float64
+	Children []*Ast
 }
 
 func FromYAML(buf []byte) (roots []*Ast, err error) {
@@ -156,13 +156,14 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 	nodeAst.Node.Cash = nodeAst.Period.Cash * float64(nodeAst.Repeat)
 	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
 
-	nodeAst.Edges = make([]*Edge, 0)
-	// Build edges for each child from the YAML Paths map.
+	nodeAst.Hyperedges = make([]*Hyperedge, 0)
+	// Build hyperedges for each child from the YAML Paths map.
 	for childname, childProb := range node.Paths {
 		childAst := nodes.toAst(childname, nodeAst)
-		nodeAst.Edges = append(nodeAst.Edges, &Edge{
-			Prob:  childProb,
-			Child: childAst,
+		// Each hyperedge contains a slice of children.
+		nodeAst.Hyperedges = append(nodeAst.Hyperedges, &Hyperedge{
+			Prob:     childProb,
+			Children: []*Ast{childAst},
 		})
 	}
 	return
@@ -209,31 +210,35 @@ func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
 		Pl()
 	*/
 
-	for _, edge := range this.Edges {
-		edge.Child.Forward(this, now, warn)
+	for _, hedge := range this.Hyperedges {
+		for _, child := range hedge.Children {
+			child.Forward(this, now, warn)
+		}
 	}
 }
 
 // calculate .Expected.*
 func (this *Ast) Backward(warn Warn) {
-	if len(this.Edges) > 0 {
+	if len(this.Hyperedges) > 0 {
 		// root or inner node
 		totalProb := 0.0
-		for _, edge := range this.Edges {
-			totalProb += edge.Prob
+		for _, hedge := range this.Hyperedges {
+			totalProb += hedge.Prob
 		}
 		if math.Abs(totalProb-1) > .001 {
 			warn("normalizing path probabilities: %s\n", this.Name)
-			for _, edge := range this.Edges {
-				edge.Prob /= totalProb
+			for _, hedge := range this.Hyperedges {
+				hedge.Prob /= totalProb
 			}
 		}
-		for _, edge := range this.Edges {
-			edge.Child.Backward(warn)
-			this.Expected.Cash += edge.Child.Expected.Cash * edge.Prob
-			this.Expected.Duration += time.Duration(float64(edge.Child.Expected.Duration) * edge.Prob)
-			this.Expected.Npv += edge.Child.Expected.Npv * edge.Prob
-			this.Expected.Mirr += edge.Child.Expected.Mirr * edge.Prob
+		for _, hedge := range this.Hyperedges {
+			for _, child := range hedge.Children {
+				child.Backward(warn)
+				this.Expected.Cash += child.Expected.Cash * hedge.Prob
+				this.Expected.Duration += time.Duration(float64(child.Expected.Duration) * hedge.Prob)
+				this.Expected.Npv += child.Expected.Npv * hedge.Prob
+				this.Expected.Mirr += child.Expected.Mirr * hedge.Prob
+			}
 		}
 	} else {
 		// leaf -- we fold the path stuff back into expected here, and only here
@@ -368,26 +373,29 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	// Determine the critical child based on the longest path (in days)
 	var criticalChild *Ast
 	var maxExtra time.Duration
-	for _, edge := range a.Edges {
-		child := edge.Child
-		// extra duration from this node to the end of child's path
-		extra := child.Path.Duration - a.Path.Duration
-		if extra > maxExtra {
-			maxExtra = extra
-			criticalChild = child
+	for _, hedge := range a.Hyperedges {
+		for _, child := range hedge.Children {
+			// extra duration from this node to the end of child's path
+			extra := child.Path.Duration - a.Path.Duration
+			if extra > maxExtra {
+				maxExtra = extra
+				criticalChild = child
+			}
 		}
 	}
 
 	// Create edges for each child, coloring the edge red if it is the critical path
-	for _, edge := range a.Edges {
-		gvchild, err := edge.Child.Dot(graph, loMirr, hiMirr, warn)
-		Ck(err)
-		gvedge, err := graph.CreateEdge("", gvparent, gvchild)
-		Ck(err)
-		gvedge.SetLabel(Spf("%.2f", edge.Prob))
-		gvedge.SetPenWidth(math.Pow(edge.Prob+0.1, 0.5) * 10)
-		if edge.Child == criticalChild {
-			gvedge.SetColor("red")
+	for _, hedge := range a.Hyperedges {
+		for _, child := range hedge.Children {
+			gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
+			Ck(err)
+			gvedge, err := graph.CreateEdge("", gvparent, gvchild)
+			Ck(err)
+			gvedge.SetLabel(Spf("%.2f", hedge.Prob))
+			gvedge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
+			if child == criticalChild {
+				gvedge.SetColor("red")
+			}
 		}
 	}
 	return
@@ -400,8 +408,10 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 	Assert(!math.IsInf(hi, 0), hi)
 	for _, a := range as {
 		var children []*Ast
-		for _, edge := range a.Edges {
-			children = append(children, edge.Child)
+		for _, hedge := range a.Hyperedges {
+			for _, child := range hedge.Children {
+				children = append(children, child)
+			}
 		}
 		clo, chi := getMirrs(children)
 		if !math.IsNaN(clo) {

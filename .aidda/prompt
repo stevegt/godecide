@@ -1,3 +1,33 @@
+replace Edge with Hyperedge 
+
+We want multiple children to be able to share the same edge.  This means that
+we need a Hyperedge struct that contains a list of Children.  Replace
+the Edge struct with a Hyperedge struct that contains a slice of
+Children, and modify related code to use the new struct.
+
+In other words:
+
+type Hyperedge struct {
+    Prob float64
+    Children []*Ast
+}
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. Please verify that the code
+  compiles and runs without errors -- do not hallucinate library
+  methods, structs, or functions that do not exist. Do not quote or
+  escape single backticks in the code -- Go uses backticks for raw
+  string literals.  Do not remove or alter comments unless they are
+  incorrect or misleading.  
+In: 
+    tree/godecide.go
+Out:
+    tree/godecide.go
+
+
+.stop
+
 suggest child map fix
 
 Using probability as a map key in Ast.Children doesn't work because if
@@ -49,53 +79,6 @@ Out:
 .stop
 
 
-create Edge struct
-
-We want multiple children to be able to share the same edge.  This means that
-we need a Hyperedge struct that contains a list of Children.  Move Ast.Prob
-and Ast.Children to the Hyperedge struct.  In other words:
-
-type Ast struct {
-	Name     string
-	Desc     string
-	Repeat   int
-	FinRate  float64
-	ReRate   float64
-	Period   Stats
-	Node     Stats
-	Path     Stats
-	Expected Stats
-	Start    time.Time
-	End      time.Time
-	Due      time.Time
-	Timeline fin.Timeline
-	Parent   *Ast
-	Edges    []*Edge
-}
-
-type Hyperedge struct {
-    Prob float64
-    Children map[string]*Ast
-}
-
-
-Sysmsg: 
-  You are an expert Go programmer. Please make the requested changes
-  to the given code or documentation. Please verify that the code
-  compiles and runs without errors -- do not hallucinate library
-  methods, structs, or functions that do not exist. Do not quote or
-  escape single backticks in the code -- Go uses backticks for raw
-  string literals.  Do not remove or alter comments unless they are
-  incorrect or misleading.  
-  
-In: 
-    .aidda/response
-    tree/godecide.go
-Out:
-    tree/godecide.go
-
-
-.stop
 an edge should be a hyperedge
 
 Instead of a probability being applied to only one edge, it should be
