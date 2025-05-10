@@ -4,9 +4,10 @@ import (
 	"embed"
 	"fmt"
 
-	// "io/fs"
+	// "io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -235,14 +236,25 @@ func TestGenerateOutputFiles(t *testing.T) {
 				t.Errorf("Failed to read expected output %s: %v", expectedFile, err)
 				continue
 			}
-			// Normalize whitespace for comparison.
-			genStr := strings.TrimSpace(string(dotBytes))
-			expStr := strings.TrimSpace(string(expected))
+			// Normalize whitespace and remove variable coordinate attributes for comparison.
+			genStr := normalizeDot(string(dotBytes))
+			expStr := normalizeDot(string(expected))
 			if genStr != expStr {
 				t.Errorf("DOT output for %s does not match expected output", fname)
 			}
 		}
 	}
+}
+
+// normalizeDot removes Graphviz coordinate attributes that may vary between runs.
+func normalizeDot(input string) string {
+	rePos := regexp.MustCompile(`pos="[^"]*"`)
+	res := rePos.ReplaceAllString(input, "")
+	reBB := regexp.MustCompile(`bb="[^"]*"`)
+	res = reBB.ReplaceAllString(res, "")
+	reRects := regexp.MustCompile(`rects="[^"]*"`)
+	res = reRects.ReplaceAllString(res, "")
+	return strings.TrimSpace(res)
 }
 
 // YAMLUnmarshal is a helper that wraps yaml.Unmarshal.

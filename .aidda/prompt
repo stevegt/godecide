@@ -1,10 +1,11 @@
-write test cases 
+fix expected output test cases
 
-Add more detailed test cases for all of the functions in godecide.go.
-- Use the built-in example files as test input data.
-- Add a flag or environment variable that causes the generation of
-  example output files in the testdata directory. 
-- Use the example output files as the expected output for the tests.
+Right now the expected output dot files aren't matching the
+actual output dot files. This is because Graphviz generated different
+placement coordinates for the nodes with each run. We either need to
+find a way for Graphviz to generate the same coordinates each time, or
+we need to change the test cases to not include the coordinates in the
+expected output comparison.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -21,6 +22,9 @@ In:
     examples/college.yaml
     examples/duedates.yaml
     examples/hbr.yaml
+    testdata/college.dot
+    testdata/duedates.dot
+    testdata/hbr.dot
 Out:
     cmd/godecide/main.go
     godecide_test.go
