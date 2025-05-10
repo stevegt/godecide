@@ -12,10 +12,10 @@ import (
 	"time"
 
 	. "github.com/stevegt/goadapt"
-	"github.com/stevegt/godecide/tree"
+	tree "github.com/stevegt/godecide"
 )
 
-//go:embed examples/*.yaml
+//go:embed tree/examples/*.yaml
 var fs embed.FS
 
 var usage string = `Usage: %s [-tb -now=<RFC3339 timestamp>] {src} {dst}

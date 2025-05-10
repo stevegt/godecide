@@ -1,6 +1,7 @@
 write test cases 
 
 Write a suite of test cases for all of the functions in godecide.go.
+Use the built-in example files as test input data.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -12,14 +13,19 @@ Sysmsg:
   incorrect or misleading.  
 In: 
     tree/godecide.go
+    tree/examples/college.yaml
+    tree/examples/duedates.yaml
+    tree/examples/hbr.yaml
 Out:
-    tree/godecide.go
     tree/godecide_test.go
+
+
+.stop
+
 
 The goal is to be able to support PERT-chart-like structures, where a node can
 have multiple parents and multiple children.
 
-.stop
 
 
 .stop
