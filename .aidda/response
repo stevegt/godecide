@@ -23,6 +23,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+//go:embed examples/*.yaml
+var ExamplesFS embed.FS
+
 type Warn func(args ...interface{})
 
 type Node struct {
@@ -168,17 +171,24 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 
 	nodeAst.Hyperedges = make([]*Hyperedge, 0)
 	// Build hyperedges for each child from the YAML Paths map in a deterministic order.
-	var childNames []string
-	for childName := range node.Paths {
-		childNames = append(childNames, childName)
+	var pathKeys []string
+	for key := range node.Paths {
+		pathKeys = append(pathKeys, key)
 	}
-	sort.Strings(childNames)
-	for _, childname := range childNames {
-		childProb := node.Paths[childname]
-		childAst := nodes.toAst(childname, nodeAst)
+	sort.Strings(pathKeys)
+	for _, pathKey := range pathKeys {
+		childProb := node.Paths[pathKey]
+		// support multiple children in the same hyperedge when names are comma separated
+		childNames := strings.Split(pathKey, ",")
+		var children []*Ast
+		for _, childName := range childNames {
+			trimmedName := strings.TrimSpace(childName)
+			childAst := nodes.toAst(trimmedName, nodeAst)
+			children = append(children, childAst)
+		}
 		nodeAst.Hyperedges = append(nodeAst.Hyperedges, &Hyperedge{
 			Prob:     childProb,
-			Children: []*Ast{childAst},
+			Children: children,
 		})
 	}
 	return
@@ -279,7 +289,7 @@ func days(d time.Duration) string {
 func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 
-	gvparent, err = graph.CreateNode(Spf("%p", a))
+	gvparent, err = graph.CreateNode(a.Name)
 	Ck(err)
 
 	gvparent.SetShape("record")
@@ -382,7 +392,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	futureRow := Spf("future   | %s", strings.Join(futureFields, " | "))
 
 	// put it all together
-	label := Spf("%s \\n %s \\n %s \\n {%s | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
+	label := Spf("%s \\n %s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow, futureRow)
 	gvparent.SetLabel(label)
 
 	// Determine the critical child based on the longest path (in days)

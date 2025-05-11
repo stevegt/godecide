@@ -167,21 +167,27 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 	nodeAst.Node.Cash = nodeAst.Period.Cash * float64(nodeAst.Repeat)
 	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
 
-	nodeAst.Hyperedges = make([]*Hyperedge, 0)
 	// Build hyperedges for each child from the YAML Paths map in a deterministic order.
-	var childNames []string
-	for childName := range node.Paths {
-		childNames = append(childNames, childName)
+	nodeAst.Hyperedges = make([]*Hyperedge, 0)
+
+	// a path key might contain more than one child name, comma separated
+	var pathKeys []string
+	for pathKey := range node.Paths {
+		pathKeys = append(pathKeys, pathKey)
 	}
-	sort.Strings(childNames)
-	for _, childname := range childNames {
-		childProb := node.Paths[childname]
-		childAst := nodes.toAst(childname, nodeAst)
-		// Each hyperedge contains a slice of children.
-		nodeAst.Hyperedges = append(nodeAst.Hyperedges, &Hyperedge{
-			Prob:     childProb,
-			Children: []*Ast{childAst},
-		})
+	sort.Strings(pathKeys)
+
+	for _, pathKey := range pathKeys {
+		pathProb := node.Paths[pathKey]
+		// split the path key into child names
+		childNames := strings.Split(pathKey, ",")
+		hyperedge := &Hyperedge{Prob: pathProb}
+		for _, childName := range childNames {
+			childAst := nodes.toAst(childName, nodeAst)
+			// Each hyperedge contains a slice of children.
+			hyperedge.Children = append(hyperedge.Children, childAst)
+		}
+		nodeAst.Hyperedges = append(nodeAst.Hyperedges, hyperedge)
 	}
 	return
 }

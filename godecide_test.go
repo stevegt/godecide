@@ -272,7 +272,7 @@ func TestGenerateOutputFiles(t *testing.T) {
 			continue
 		}
 		if text != "" {
-			t.Errorf("Output for %s does not match expected:\n%s", fname, text)
+			t.Errorf("Output for %s does not match expected -- for details:\n\tvimdiff %s %s", fname, expectedFile, actualFile)
 		} else {
 			t.Logf("Output for %s matches expected.", fname)
 		}

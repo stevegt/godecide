@@ -1,10 +1,20 @@
-fix expected output test cases
+support parallel children under same probability
 
-Right now the expected output dot files aren't matching the actual
-output dot files because the nodes and edges are not in a
-deterministic order in the output.  
+Use the existing hyperedge structure to support PERT-chart-like
+usage, where a node can have multiple parents and multiple
+children.  
 
-Use the advice in /tmp/rs1 and /tmp/rs2 to fix the code.
+The input for multiple children in the same hyperedge would look like
+this, where bar and bong are children of alt that are grouped in the
+same hyperedge, and bing is a child of alt in a different hyperedge:
+
+
+alt:
+  desc: alternative
+  days: 365
+  paths:
+    bar,bong: .5
+    bing: .5
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -16,13 +26,11 @@ Sysmsg:
   incorrect or misleading.  
 In: 
     godecide.go
-    /tmp/rs1
-    /tmp/rs2
 Out:
     godecide.go
 
-
 .stop
+
     cmd/godecide/main.go
     godecide.go
     godecide_test.go
@@ -55,7 +63,6 @@ Sysmsg:
   escape single backticks in the code -- Go uses backticks for raw
   string literals.  Do not remove or alter comments unless they are
   incorrect or misleading.  
-  
 In: 
     tree/godecide.go
     main.go
