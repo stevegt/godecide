@@ -417,15 +417,56 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 		}
 	}
 
-	// Create edges for each child, coloring the edge red if it is the critical path
+	// Create edges for hyperedges.
+	// For a hyperedge with a single child, create an edge directly from the parent.
+	// For a hyperedge with multiple children, create a group node with shape=point,
+	// add an edge from the parent to the group node with the hyperedge probability,
+	// then add an edge from the group node to each child. Label the parent->group edge,
+	// but do not label the group->child edges. Color a child edge red if it is on the critical path.
+	groupCount := 0
 	for _, hedge := range a.Hyperedges {
+		parent := gvparent
+		showProb := true
+		if len(hedge.Children) > 1 {
+			// create a group node
+			groupCount++
+			groupNodeName := Spf("%s_group_%d", name, groupCount)
+			groupNode, err := graph.CreateNode(groupNodeName)
+			Ck(err)
+			groupNode.SetShape("point")
+			// set size
+			groupNode.SetWidth(.25)
+			groupNode.SetHeight(.25)
+			// set color to black
+			groupNode.SetFillColor("black")
+			parent = groupNode
+			// create edge from parent to group node
+			groupEdge, err := graph.CreateEdge("", gvparent, groupNode)
+			Ck(err)
+			// label the edge with the probability
+			groupEdge.SetLabel(Spf("%.2f", hedge.Prob))
+			// set the pen width
+			groupEdge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
+			// if any child is critical, color the edge red
+			for _, child := range hedge.Children {
+				if child == criticalChild {
+					groupEdge.SetColor("red")
+					break
+				}
+			}
+			// don't show the probability on the child edges
+			showProb = false
+		}
+		// create edges from parent to children
 		for _, child := range hedge.Children {
-			// Pf("%s -> %s\n", name, child.Name)
 			gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 			Ck(err)
-			gvedge, err := graph.CreateEdge("", gvparent, gvchild)
+			gvedge, err := graph.CreateEdge("", parent, gvchild)
 			Ck(err)
-			gvedge.SetLabel(Spf("%.2f", hedge.Prob))
+			if showProb {
+				gvedge.SetLabel(Spf("%.2f", hedge.Prob))
+			}
+			// set the pen width
 			gvedge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
 			if child == criticalChild {
 				gvedge.SetColor("red")

@@ -1,9 +1,14 @@
-support parallel children under same probability
+hyperedge grouping
 
-Figure out why the input in /tmp/ss.yaml is producing both a bong_1
-and bong_2 node in the dot output.  The bong_2 node is not
-connected to the rest of the graph, and it should not be created at
-all.  
+For a group of dot edges that are all created from the same hyperedge,
+we want to show the probability edge label only once per group, and we
+want the group of edges to be adjacent in the dot output.  
+
+If a hyperedge has multiple children, then create a new node with
+shape=point, add a dot edge from the parent to the new node, and label
+that edge with the hyperedge probability.  Then create a dot edge from
+the new node to each child as usual, but do not label those edges.  Do
+color a child edge red if it is the critical path.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -15,8 +20,7 @@ Sysmsg:
   incorrect or misleading.  
 In: 
     godecide.go
-    /tmp/ss.yaml
-Out:
+Out: 
     godecide.go
 
 .stop
