@@ -63,6 +63,7 @@ type Ast struct {
 	Due        time.Time
 	Timeline   fin.Timeline
 	Parent     *Ast
+	Critical   bool
 	Hyperedges []*Hyperedge
 }
 
@@ -403,20 +404,6 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
 	gvparent.SetLabel(label)
 
-	// Determine the critical child based on the longest path (in days)
-	var criticalChild *Ast
-	var maxExtra time.Duration
-	for _, hedge := range a.Hyperedges {
-		for _, child := range hedge.Children {
-			// extra duration from this node to the end of child's path
-			extra := child.Path.Duration - a.Path.Duration
-			if extra > maxExtra {
-				maxExtra = extra
-				criticalChild = child
-			}
-		}
-	}
-
 	// Create edges for hyperedges.
 	// For a hyperedge with a single child, create an edge directly from the parent.
 	// For a hyperedge with multiple children, create a group node with shape=point,
@@ -447,9 +434,9 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 			groupEdge.SetLabel(Spf("%.2f", hedge.Prob))
 			// set the pen width
 			groupEdge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
-			// if any child is critical, color the edge red
+			// if any child is critical, color the group edge red
 			for _, child := range hedge.Children {
-				if child == criticalChild {
+				if child.Critical {
 					groupEdge.SetColor("red")
 					break
 				}
@@ -468,7 +455,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 			}
 			// set the pen width
 			gvedge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
-			if child == criticalChild {
+			if child.Critical {
 				gvedge.SetColor("red")
 			}
 		}
@@ -519,6 +506,12 @@ func Recalc(roots []*Ast, now time.Time, warn Warn) {
 	for _, root := range roots {
 		root.Backward(warn)
 	}
+
+	// set critical path field
+	for _, root := range roots {
+		root.SetCriticalPath()
+	}
+
 }
 
 func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
@@ -614,4 +607,30 @@ func allNodes(graph *cgraph.Graph) (nodes []*cgraph.Node) {
 		node = graph.NextNode(node)
 	}
 	return
+}
+
+// SetCriticalPath sets the Critical field of the Ast struct to true
+// if the node is on the critical path.  We determine the critical path
+// by looking at the expected days of each of the children of the given
+// node.
+func (this *Ast) SetCriticalPath() {
+	maxDur := time.Duration(0)
+	for _, hedge := range this.Hyperedges {
+		// recurse
+		for _, child := range hedge.Children {
+			child.SetCriticalPath()
+		}
+		for _, child := range hedge.Children {
+			if child.Expected.Duration > maxDur {
+				maxDur = child.Expected.Duration
+			}
+		}
+	}
+	for _, hedge := range this.Hyperedges {
+		for _, child := range hedge.Children {
+			if child.Expected.Duration >= maxDur {
+				child.Critical = true
+			}
+		}
+	}
 }

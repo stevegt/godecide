@@ -1,10 +1,12 @@
-add PERT example
+move critical path analysis to Ast
 
-Using /tmp/ss.yaml as a starting point, create a new example that
-demonstrates PERT-like usage.  In particular, the 'alt' node has a
-path that has two children (bar and bong) that execute in parallel.
+Instead of doing the critical path analysis in the Dot() function, we should
+move it to the Ast struct. This will allow us to do the critical path analysis
+regardless of the output format. 
 
-Use realistic names and descritions for the nodes.  
+Modify the Ast struct to include a CriticalPath boolean, add a method
+that does the critical path analysis, call that method after loading
+from yaml, and then refer to the CriticalPath boolean in the Dot() function.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -15,12 +17,9 @@ Sysmsg:
   string literals.  Do not remove or alter comments unless they are
   incorrect or misleading.  
 In: 
-    /tmp/ss.yaml
-    examples/college.yaml
-    examples/duedates.yaml
-    examples/hbr.yaml
+    godecide.go
 Out: 
-    examples/pert.yaml
+    godecide.go
 
 .stop
 
@@ -30,6 +29,7 @@ Out:
     examples/college.yaml
     examples/duedates.yaml
     examples/hbr.yaml
+    examples/pert.yaml
     testdata/college.dot
     testdata/duedates.dot
     testdata/hbr.dot
