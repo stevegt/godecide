@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -77,7 +78,14 @@ func FromYAML(buf []byte) (roots []*Ast, err error) {
 }
 
 func (nodes Nodes) ToAst() (roots []*Ast) {
-	for name := range nodes.RootNodes() {
+	// get the root nodes (as a map)
+	rootNodes := nodes.RootNodes()
+	var rootNames []string
+	for name := range rootNodes {
+		rootNames = append(rootNames, name)
+	}
+	sort.Strings(rootNames)
+	for _, name := range rootNames {
 		root := nodes.toAst(name, nil)
 		roots = append(roots, root)
 	}
@@ -157,8 +165,14 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
 
 	nodeAst.Hyperedges = make([]*Hyperedge, 0)
-	// Build hyperedges for each child from the YAML Paths map.
-	for childname, childProb := range node.Paths {
+	// Build hyperedges for each child from the YAML Paths map in a deterministic order.
+	var childNames []string
+	for childName := range node.Paths {
+		childNames = append(childNames, childName)
+	}
+	sort.Strings(childNames)
+	for _, childname := range childNames {
+		childProb := node.Paths[childname]
 		childAst := nodes.toAst(childname, nodeAst)
 		// Each hyperedge contains a slice of children.
 		nodeAst.Hyperedges = append(nodeAst.Hyperedges, &Hyperedge{
@@ -466,6 +480,10 @@ func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
 		graph.SetRankDir("LR")
 	}
 
+	// Sort the roots based on their name.
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i].Name < roots[j].Name
+	})
 	for _, root := range roots {
 		root.Dot(graph, loMirr, hiMirr, warn)
 	}

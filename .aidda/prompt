@@ -4,7 +4,7 @@ Right now the expected output dot files aren't matching the actual
 output dot files because the nodes and edges are not in a
 deterministic order in the output.  
 
-Recommend a solution.
+Use the advice in /tmp/rs1 and /tmp/rs2 to fix the code.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -15,6 +15,14 @@ Sysmsg:
   string literals.  Do not remove or alter comments unless they are
   incorrect or misleading.  
 In: 
+    godecide.go
+    /tmp/rs1
+    /tmp/rs2
+Out:
+    godecide.go
+
+
+.stop
     cmd/godecide/main.go
     godecide.go
     godecide_test.go
