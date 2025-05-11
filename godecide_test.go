@@ -3,6 +3,7 @@ package tree
 import (
 	"embed"
 	"fmt"
+	"sort"
 
 	// "io/ioutil"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/warpfork/go-wish/difflib"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -221,7 +223,24 @@ func TestGenerateOutputFiles(t *testing.T) {
 		Recalc(roots, now, testWarn(t))
 		dotBytes := ToDot(roots, testWarn(t), false)
 
-		expectedFile := filepath.Join("testdata", strings.TrimSuffix(fname, ".yaml")+".dot")
+		// create a temporary directory name named
+		// /tmp/godecide-test-*, where * is a random string
+		tmpDir, err := os.MkdirTemp("/tmp", "godecide-test-*")
+		if err != nil {
+			t.Errorf("Failed to create temporary directory: %v", err)
+			continue
+		}
+
+		baseName := strings.TrimSuffix(fname, ".yaml")
+		expectedFile := filepath.Join("testdata", baseName+".dot")
+		actualFile := filepath.Join(tmpDir, baseName+"_actual.dot")
+
+		// Write actual output to file for inspection.
+		err = os.WriteFile(actualFile, dotBytes, 0644)
+		if err != nil {
+			t.Errorf("Failed to write actual output file %s: %v", actualFile, err)
+		}
+
 		if genOutput != "" {
 			err = os.WriteFile(expectedFile, dotBytes, 0644)
 			if err != nil {
@@ -229,19 +248,33 @@ func TestGenerateOutputFiles(t *testing.T) {
 			} else {
 				t.Logf("Generated output file: %s", expectedFile)
 			}
+		}
+
+		expected, err := os.ReadFile(expectedFile)
+		if err != nil {
+			t.Errorf("Failed to read expected output %s: %v", expectedFile, err)
+			continue
+		}
+		// Normalize whitespace and remove variable coordinate attributes for comparison.
+		genStr := normalizeDot(string(dotBytes))
+		expStr := normalizeDot(string(expected))
+		diff := difflib.UnifiedDiff{
+			A:        difflib.SplitLines(genStr),
+			B:        difflib.SplitLines(expStr),
+			FromFile: expectedFile,
+			ToFile:   actualFile,
+			Context:  3,
+		}
+		text, err := difflib.GetUnifiedDiffString(diff)
+		if err != nil {
+			// If expected file does not exist, indicate to generate it.
+			t.Errorf("Failed to read expected output %s: %v", expectedFile, err)
+			continue
+		}
+		if text != "" {
+			t.Errorf("Output for %s does not match expected:\n%s", fname, text)
 		} else {
-			expected, err := os.ReadFile(expectedFile)
-			if err != nil {
-				// If expected file does not exist, indicate to generate it.
-				t.Errorf("Failed to read expected output %s: %v", expectedFile, err)
-				continue
-			}
-			// Normalize whitespace and remove variable coordinate attributes for comparison.
-			genStr := normalizeDot(string(dotBytes))
-			expStr := normalizeDot(string(expected))
-			if genStr != expStr {
-				t.Errorf("DOT output for %s does not match expected output", fname)
-			}
+			t.Logf("Output for %s matches expected.", fname)
 		}
 	}
 }
@@ -255,6 +288,21 @@ func normalizeDot(input string) string {
 	reRects := regexp.MustCompile(`rects="[^"]*"`)
 	res = reRects.ReplaceAllString(res, "")
 	return strings.TrimSpace(res)
+}
+
+// sortLines is a helper function that splits the input into lines, sorts them, and rejoins them.
+func sortLines(input string) string {
+	lines := strings.Split(input, "\n")
+	// Remove empty lines.
+	var nonEmpty []string
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			nonEmpty = append(nonEmpty, l)
+		}
+	}
+	sort.Strings(nonEmpty)
+	return strings.Join(nonEmpty, "\n")
 }
 
 // YAMLUnmarshal is a helper that wraps yaml.Unmarshal.
