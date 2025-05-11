@@ -168,7 +168,6 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
 
 	// Build hyperedges for each child from the YAML Paths map in a deterministic order.
-	nodeAst.Hyperedges = make([]*Hyperedge, 0)
 
 	// a path key might contain more than one child name, comma separated
 	var pathKeys []string
@@ -189,6 +188,7 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 		}
 		nodeAst.Hyperedges = append(nodeAst.Hyperedges, hyperedge)
 	}
+	// spew.Dump(nodeAst)
 	return
 }
 
@@ -287,7 +287,9 @@ func days(d time.Duration) string {
 func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 
-	gvparent, err = graph.CreateNode(a.Name)
+	count := countNodesPrefixed(graph, a.Name)
+	name := Spf("%s_%d", a.Name, count+1)
+	gvparent, err = graph.CreateNode(name)
 	Ck(err)
 
 	gvparent.SetShape("record")
@@ -390,7 +392,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	futureRow := Spf("future   | %s", strings.Join(futureFields, " | "))
 
 	// put it all together
-	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", a.Name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
+	label := Spf("%s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
 	gvparent.SetLabel(label)
 
 	// Determine the critical child based on the longest path (in days)
@@ -537,6 +539,28 @@ func LsExamples(fs embed.FS) (out string) {
 			desc = lines[0]
 		}
 		out += Spf("\t\texample:%-15s%s\n", name, desc)
+	}
+	return
+}
+
+// countNodesPrefixed returns the number of nodes with the given name.
+// This is used to create unique node names in the graphviz output.
+func countNodesPrefixed(graph *cgraph.Graph, name string) (n int) {
+	re := regexp.MustCompile(Spf("^%s_[0-9]+$", name))
+	for _, node := range allNodes(graph) {
+		if re.MatchString(node.Name()) {
+			n++
+		}
+	}
+	return
+}
+
+// allNodes returns all nodes in the graph.
+func allNodes(graph *cgraph.Graph) (nodes []*cgraph.Node) {
+	node := graph.FirstNode()
+	for node != nil {
+		nodes = append(nodes, node)
+		node = graph.NextNode(node)
 	}
 	return
 }

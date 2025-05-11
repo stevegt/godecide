@@ -3,6 +3,7 @@ module github.com/stevegt/godecide
 go 1.16
 
 require (
+	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/goccy/go-graphviz v0.0.9
 	github.com/rickb777/date v1.17.0

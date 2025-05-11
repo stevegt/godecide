@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/stevegt/goadapt"
 	"github.com/warpfork/go-wish/difflib"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -272,7 +273,14 @@ func TestGenerateOutputFiles(t *testing.T) {
 			continue
 		}
 		if text != "" {
-			t.Errorf("Output for %s does not match expected -- for details:\n\tvimdiff %s %s", fname, expectedFile, actualFile)
+			// write genStr and expStr to temporary files for inspection
+			genFn := filepath.Join(tmpDir, baseName+"_got_normalized.dot")
+			expFn := filepath.Join(tmpDir, baseName+"_want_normalized.dot")
+			err = os.WriteFile(genFn, []byte(genStr), 0644)
+			Ck(err)
+			err = os.WriteFile(expFn, []byte(expStr), 0644)
+			Ck(err)
+			t.Errorf("Output for %s does not match expected -- for details:\n\tvimdiff %s %s", fname, expFn, genFn)
 		} else {
 			t.Logf("Output for %s matches expected.", fname)
 		}
