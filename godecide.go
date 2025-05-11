@@ -89,6 +89,7 @@ func (nodes Nodes) ToAst() (roots []*Ast) {
 	}
 	sort.Strings(rootNames)
 	for _, name := range rootNames {
+		// Pf("ToAst root %s\n", name)
 		root := nodes.toAst(name, nil)
 		roots = append(roots, root)
 	}
@@ -111,8 +112,13 @@ func (nodes Nodes) RootNodes() (rootnodes Nodes) {
 	}
 	// remove children from list
 	for _, parent := range nodes {
-		for child := range parent.Paths {
-			delete(rootnodes, child)
+		for pathKey := range parent.Paths {
+			// split the path key into child names
+			childNames := strings.Split(pathKey, ",")
+			// remove each child from the root node list
+			for _, childName := range childNames {
+				delete(rootnodes, childName)
+			}
 		}
 	}
 	return
@@ -184,6 +190,7 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 		for _, childName := range childNames {
 			childAst := nodes.toAst(childName, nodeAst)
 			// Each hyperedge contains a slice of children.
+			// Pf("%s -> %s\n", nodeAst.Name, childAst.Name)
 			hyperedge.Children = append(hyperedge.Children, childAst)
 		}
 		nodeAst.Hyperedges = append(nodeAst.Hyperedges, hyperedge)
@@ -289,6 +296,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 
 	count := countNodesPrefixed(graph, a.Name)
 	name := Spf("%s_%d", a.Name, count+1)
+	// Pf("create node %s\n", name)
 	gvparent, err = graph.CreateNode(name)
 	Ck(err)
 
@@ -412,6 +420,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	// Create edges for each child, coloring the edge red if it is the critical path
 	for _, hedge := range a.Hyperedges {
 		for _, child := range hedge.Children {
+			// Pf("%s -> %s\n", name, child.Name)
 			gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 			Ck(err)
 			gvedge, err := graph.CreateEdge("", gvparent, gvchild)
@@ -496,6 +505,7 @@ func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
 		return roots[i].Name < roots[j].Name
 	})
 	for _, root := range roots {
+		// Pf("root %s\n", root.Name)
 		root.Dot(graph, loMirr, hiMirr, warn)
 	}
 

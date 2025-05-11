@@ -1,20 +1,9 @@
 support parallel children under same probability
 
-Use the existing hyperedge structure to support PERT-chart-like
-usage, where a node can have multiple parents and multiple
-children.  
-
-The input for multiple children in the same hyperedge would look like
-this, where bar and bong are children of alt that are grouped in the
-same hyperedge, and bing is a child of alt in a different hyperedge:
-
-
-alt:
-  desc: alternative
-  days: 365
-  paths:
-    bar,bong: .5
-    bing: .5
+Figure out why the input in /tmp/ss.yaml is producing both a bong_1
+and bong_2 node in the dot output.  The bong_2 node is not
+connected to the rest of the graph, and it should not be created at
+all.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -26,6 +15,7 @@ Sysmsg:
   incorrect or misleading.  
 In: 
     godecide.go
+    /tmp/ss.yaml
 Out:
     godecide.go
 
