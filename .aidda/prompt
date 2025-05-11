@@ -1,14 +1,10 @@
-hyperedge grouping
+add PERT example
 
-For a group of dot edges that are all created from the same hyperedge,
-we want to show the probability edge label only once per group, and we
-want the group of edges to be adjacent in the dot output.  
+Using /tmp/ss.yaml as a starting point, create a new example that
+demonstrates PERT-like usage.  In particular, the 'alt' node has a
+path that has two children (bar and bong) that execute in parallel.
 
-If a hyperedge has multiple children, then create a new node with
-shape=point, add a dot edge from the parent to the new node, and label
-that edge with the hyperedge probability.  Then create a dot edge from
-the new node to each child as usual, but do not label those edges.  Do
-color a child edge red if it is the critical path.
+Use realistic names and descritions for the nodes.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -19,9 +15,12 @@ Sysmsg:
   string literals.  Do not remove or alter comments unless they are
   incorrect or misleading.  
 In: 
-    godecide.go
+    /tmp/ss.yaml
+    examples/college.yaml
+    examples/duedates.yaml
+    examples/hbr.yaml
 Out: 
-    godecide.go
+    examples/pert.yaml
 
 .stop
 
