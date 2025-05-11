@@ -21,6 +21,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+//go:embed examples/*.yaml
+var ExamplesFS embed.FS
+
 type Warn func(args ...interface{})
 
 type Node struct {
@@ -278,7 +281,7 @@ func days(d time.Duration) string {
 func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvparent *cgraph.Node, err error) {
 	defer Return(&err)
 
-	gvparent, err = graph.CreateNode(Spf("%p", a))
+	gvparent, err = graph.CreateNode(a.Name)
 	Ck(err)
 
 	gvparent.SetShape("record")
