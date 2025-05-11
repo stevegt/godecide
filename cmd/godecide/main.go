@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -14,9 +13,6 @@ import (
 	. "github.com/stevegt/goadapt"
 	tree "github.com/stevegt/godecide"
 )
-
-//go:embed tree/examples/*.yaml
-var fs embed.FS
 
 var usage string = `Usage: %s [-tb -now=<RFC3339 timestamp>] {src} {dst}
 
@@ -32,6 +28,8 @@ For the -now flag, the default is the current time.
 `
 
 func main() {
+	fs := tree.ExamplesFS
+
 	// set custom usage
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0], tree.LsExamples(fs))
@@ -101,7 +99,7 @@ func main() {
 		fh, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 		if err != nil {
 			// backup existing dst file
-			bakfn := Spf("%s-*.dot", path.Base(dst))
+			bakfn := fmt.Sprintf("%s-*.dot", path.Base(dst))
 			bakfh, err := ioutil.TempFile("/tmp", bakfn)
 			Ck(err)
 			bakbuf, err := ioutil.ReadFile(dst)
