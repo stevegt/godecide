@@ -9,7 +9,7 @@ digraph "" {
 	edge [color=black,
 		penwidth=1.0
 	];
-	"0xc000239040"	 [fillcolor="0.239 1.0 0.661",
+	dp1	 [fillcolor="0.239 1.0 0.661",
 		height=2.5472,
 		label="dp1 \n decision point 1 \n 2023-01-01 - 2023-01-01 | { {|cash|duration|npv|mirr} | {node     | 0 | 0 days | 0 | } | {past     | \
 0 | 0 days | 0 | NaN%} | {future   | 2,962,200 | 3650 days | 931,330 | 12.0%}}",
@@ -22,7 +22,7 @@ digraph "" {
 		shape=record,
 		style=filled,
 		width=3.362];
-	"0xc0002391e0"	 [fillcolor="0.204 1.0 0.535",
+	big	 [fillcolor="0.204 1.0 0.535",
 		height=2.5472,
 		label="big \n build big plant \n 2023-01-01 - 2023-01-01 | { {|cash|duration|npv|mirr} | {node     | -3,000,000 | 0 days | 0 | } | {past     | \
 -3,000,000 | 0 days | -3,000,000 | -100.0%} | {future   | 3,580,000 | 3650 days | 1,089,912 | 9.7%}}",
@@ -35,11 +35,11 @@ digraph "" {
 		shape=record,
 		style=filled,
 		width=4.0158];
-	"0xc000239040" -> "0xc0002391e0"	 [label=0.50,
+	dp1 -> big	 [label=0.50,
 		lp="272.31,698.5",
 		penwidth=7.745966692414834,
 		pos="e,302.47,698.1 242.46,673.62 258.96,680.35 276.07,687.33 293.05,694.26"];
-	"0xc000239a00"	 [fillcolor="0.274 1.0 0.788",
+	small	 [fillcolor="0.274 1.0 0.788",
 		height=2.5472,
 		label="small \n build small plant \n 2023-01-01 - 2023-01-01 | { {|cash|duration|npv|mirr} | {node     | -1,300,000 | 0 days | 0 | } | {\
 past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 | 3650 days | 772,748 | 14.3%}}",
@@ -52,11 +52,11 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=4.0158];
-	"0xc000239040" -> "0xc000239a00"	 [label=0.50,
+	dp1 -> small	 [label=0.50,
 		lp="272.31,543.5",
 		penwidth=7.745966692414834,
 		pos="e,302.47,512.27 242.46,549.26 259.11,538.99 276.39,528.34 293.52,517.78"];
-	"0xc000239380"	 [fillcolor="0.333 1.0 1.000",
+	"big-highavg"	 [fillcolor="0.333 1.0 1.000",
 		height=2.5472,
 		label="big-highavg \n high average demand \n 2023-01-01 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 10,000,000 | 3650 days | \
 0 | } | {past     | 7,000,000 | 3650 days | 3,146,404 | 18.2%} | {future   | 7,000,000 | 3650 days | 3,146,404 | 18.2%}}",
@@ -69,12 +69,12 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=3.9997];
-	"0xc0002391e0" -> "0xc000239380"	 [color=red,
+	big -> "big-highavg"	 [color=red,
 		label=0.60,
 		lp="621.95,916.5",
 		penwidth=8.366600265340756,
 		pos="e,663.72,934.71 554.58,848.51 585.65,874.16 619.9,901.69 652.2,926.1 653.26,926.9 654.33,927.71 655.4,928.51"];
-	"0xc000239520"	 [fillcolor="0.155 1.0 0.400",
+	"big-highinit"	 [fillcolor="0.155 1.0 0.400",
 		height=2.5472,
 		label="big-highinit \n high initial demand \n 2023-01-01 - 2024-12-31 | { {|cash|duration|npv|mirr} | {node     | 2,000,000 | 730 days | \
 0 | } | {past     | -1,000,000 | 730 days | -1,264,300 | -16.3%} | {future   | -200,000 | 3650 days | -823,230 | 6.5%}}",
@@ -87,11 +87,11 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=3.9511];
-	"0xc0002391e0" -> "0xc000239520"	 [label=0.10,
+	big -> "big-highinit"	 [label=0.10,
 		lp="621.95,801.5",
 		penwidth=4.47213595499958,
 		pos="e,654.39,797.41 591.87,785.25 609.14,788.61 626.82,792.05 644.2,795.43"];
-	"0xc000239860"	 [fillcolor="0.000 1.0 1.000",
+	"big-lowavg"	 [fillcolor="0.000 1.0 1.000",
 		height=2.5472,
 		label="big-lowavg \n low average demand \n 2023-01-01 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 1,000,000 | 3650 days | \
 0 | } | {past     | -2,000,000 | 3650 days | -2,385,359 | -6.1%} | {future   | -2,000,000 | 3650 days | -2,385,359 | -6.1%}}",
@@ -104,11 +104,11 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=4.0158];
-	"0xc0002391e0" -> "0xc000239860"	 [label=0.30,
+	big -> "big-lowavg"	 [label=0.30,
 		lp="621.95,702.5",
 		penwidth=6.324555320336759,
 		pos="e,652.14,679.11 591.87,702.04 608.67,695.65 625.85,689.12 642.77,682.68"];
-	"0xc0002396c0"	 [fillcolor="0.155 1.0 0.400",
+	lowsub	 [fillcolor="0.155 1.0 0.400",
 		height=2.5472,
 		label="lowsub \n low subsequent demand \n 2024-12-31 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 800,000 | 2920 days | 0 | } | {\
 past     | -200,000 | 3650 days | -823,230 | 6.5%} | {future   | -200,000 | 3650 days | -823,230 | 6.5%}}",
@@ -121,12 +121,12 @@ past     | -200,000 | 3650 days | -823,230 | 6.5%} | {future   | -200,000 | 3650
 		shape=record,
 		style=filled,
 		width=3.9185];
-	"0xc000239520" -> "0xc0002396c0"	 [color=red,
+	"big-highinit" -> lowsub	 [color=red,
 		label=1.00,
 		lp="971.59,833.5",
 		penwidth=10.488088481701517,
 		pos="e,1001.7,825.1 939.05,825.1 956.36,825.1 974.08,825.1 991.51,825.1"];
-	"0xc000239ba0"	 [fillcolor="0.255 1.0 0.719",
+	"small-highinit"	 [fillcolor="0.255 1.0 0.719",
 		height=2.5472,
 		label="small-highinit \n high initial demand (2 yrs) \n 2023-01-01 - 2024-12-31 | { {|cash|duration|npv|mirr} | {node     | 900,000 | 730 \
 days | 0 | } | {past     | -400,000 | 730 days | -518,935 | -14.8%} | {future   | 2,192,000 | 3650 days | 607,399 | 13.1%}}",
@@ -139,11 +139,11 @@ days | 0 | } | {past     | -400,000 | 730 days | -518,935 | -14.8%} | {future   
 		shape=record,
 		style=filled,
 		width=3.7241];
-	"0xc000239a00" -> "0xc000239ba0"	 [label=0.70,
+	small -> "small-highinit"	 [label=0.70,
 		lp="621.95,431.5",
 		penwidth=8.94427190999916,
 		pos="e,662.51,423.1 591.87,423.1 611.87,423.1 632.43,423.1 652.43,423.1"];
-	"0xc00026a9c0"	 [fillcolor="0.319 1.0 0.948",
+	"small-lowinit"	 [fillcolor="0.319 1.0 0.948",
 		height=2.5472,
 		label="small-lowinit \n low demand \n 2023-01-01 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 4,000,000 | 3650 days | 0 | } | {\
 past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 3650 days | 1,158,561 | 17.2%}}",
@@ -156,12 +156,12 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.9185];
-	"0xc000239a00" -> "0xc00026a9c0"	 [color=red,
+	small -> "small-lowinit"	 [color=red,
 		label=0.30,
 		lp="621.95,337.5",
 		penwidth=6.324555320336759,
 		pos="e,655.52,303.3 591.87,339.89 609.95,329.5 628.47,318.85 646.64,308.41"];
-	"0xc000239d40"	 [fillcolor="0.255 1.0 0.719",
+	dp2	 [fillcolor="0.255 1.0 0.719",
 		height=2.5472,
 		label="dp2 \n decision point 2 \n 2024-12-31 - 2024-12-31 | { {|cash|duration|npv|mirr} | {node     | 0 | 0 days | 0 | } | {past     | \
 -400,000 | 730 days | -518,935 | -14.8%} | {future   | 2,192,000 | 3650 days | 607,399 | 13.1%}}",
@@ -174,11 +174,11 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.5297];
-	"0xc000239ba0" -> "0xc000239d40"	 [label=1.00,
+	"small-highinit" -> dp2	 [label=1.00,
 		lp="971.59,431.5",
 		penwidth=10.488088481701517,
 		pos="e,1015.8,423.1 931.09,423.1 955.56,423.1 981.11,423.1 1005.7,423.1"];
-	"0xc00026a000"	 [fillcolor="0.215 1.0 0.572",
+	expand	 [fillcolor="0.215 1.0 0.572",
 		height=2.5472,
 		label="expand \n expand plant \n 2024-12-31 - 2024-12-31 | { {|cash|duration|npv|mirr} | {node     | -2,200,000 | 0 days | 0 | } | {past     | \
 -2,600,000 | 730 days | -2,337,347 | -45.0%} | {future   | 2,272,000 | 3650 days | 348,772 | 10.4%}}",
@@ -191,11 +191,11 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=4.0158];
-	"0xc000239d40" -> "0xc00026a000"	 [label=0.50,
+	dp2 -> expand	 [label=0.50,
 		lp="1314.2,486.5",
 		penwidth=7.745966692414834,
 		pos="e,1344.4,484.21 1270.3,461.75 1291.2,468.09 1313.1,474.72 1334.5,481.23"];
-	"0xc00026a4e0"	 [fillcolor="0.296 1.0 0.866",
+	nochange	 [fillcolor="0.296 1.0 0.866",
 		height=2.5472,
 		label="nochange \n no change in plant \n 2024-12-31 - 2024-12-31 | { {|cash|duration|npv|mirr} | {node     | 0 | 0 days | 0 | } | {past     | \
 -400,000 | 730 days | -518,935 | -14.8%} | {future   | 2,112,000 | 3650 days | 866,026 | 15.7%}}",
@@ -208,11 +208,11 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.5297];
-	"0xc000239d40" -> "0xc00026a4e0"	 [label=0.50,
+	dp2 -> nochange	 [label=0.50,
 		lp="1314.2,382.5",
 		penwidth=7.745966692414834,
 		pos="e,1361.9,356.67 1270.3,384.45 1296.9,376.38 1325.1,367.83 1352,359.66"];
-	"0xc00026a1a0"	 [fillcolor="0.245 1.0 0.682",
+	"expand-highavg"	 [fillcolor="0.245 1.0 0.682",
 		height=2.5472,
 		label="expand-highavg \n high average demand \n 2024-12-31 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 5,600,000 | 2920 days | \
 0 | } | {past     | 3,000,000 | 3650 days | 750,146 | 12.4%} | {future   | 3,000,000 | 3650 days | 750,146 | 12.4%}}",
@@ -225,12 +225,12 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.9185];
-	"0xc00026a000" -> "0xc00026a1a0"	 [color=red,
+	expand -> "expand-highavg"	 [color=red,
 		label=0.86,
 		lp="1663.9,642.5",
 		penwidth=9.797958971132712,
 		pos="e,1697.4,647.9 1633.8,611.31 1651.9,621.7 1670.4,632.35 1688.5,642.79"];
-	"0xc00026a340"	 [fillcolor="0.117 1.0 0.400",
+	"expand-lowavg"	 [fillcolor="0.117 1.0 0.400",
 		height=2.5472,
 		label="expand-lowavg \n low average demand \n 2024-12-31 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 400,000 | 2920 days | \
 0 | } | {past     | -2,200,000 | 3650 days | -2,116,811 | -1.8%} | {future   | -2,200,000 | 3650 days | -2,116,811 | -1.8%}}",
@@ -243,11 +243,11 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=4.0158];
-	"0xc00026a000" -> "0xc00026a340"	 [label=0.14,
+	expand -> "expand-lowavg"	 [label=0.14,
 		lp="1663.9,536.5",
 		penwidth=4.898979485566357,
 		pos="e,1694.1,528.1 1633.8,528.1 1650.3,528.1 1667.1,528.1 1683.7,528.1"];
-	"0xc00026a680"	 [fillcolor="0.291 1.0 0.849",
+	"nochange-highavg"	 [fillcolor="0.291 1.0 0.849",
 		height=2.7806,
 		label="nochange-highavg \n high average demand\n(shared with competition) \n 2024-12-31 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | \
 2,400,000 | 2920 days | 0 | } | {past     | 2,000,000 | 3650 days | 804,276 | 15.4%} | {future   | 2,000,000 | 3650 days | 804,276 | \
@@ -261,12 +261,12 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.9185];
-	"0xc00026a4e0" -> "0xc00026a680"	 [color=red,
+	nochange -> "nochange-highavg"	 [color=red,
 		label=0.86,
 		lp="1663.9,326.5",
 		penwidth=9.797958971132712,
 		pos="e,1697.4,318.1 1616.3,318.1 1639.3,318.1 1663.6,318.1 1687.3,318.1"];
-	"0xc00026a820"	 [fillcolor="0.325 1.0 0.971",
+	"nochange-lowavg"	 [fillcolor="0.325 1.0 0.971",
 		height=2.7806,
 		label="nochange-lowavg \n low average demand\n(no competition) \n 2024-12-31 - 2032-12-29 | { {|cash|duration|npv|mirr} | {node     | 3,\
 200,000 | 2920 days | 0 | } | {past     | 2,800,000 | 3650 days | 1,245,346 | 17.7%} | {future   | 2,800,000 | 3650 days | 1,245,\
@@ -279,7 +279,7 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.9185];
-	"0xc00026a4e0" -> "0xc00026a820"	 [label=0.14,
+	nochange -> "nochange-lowavg"	 [label=0.14,
 		lp="1663.9,224.5",
 		penwidth=4.898979485566357,
 		pos="e,1697.4,188.21 1616.3,238.78 1639.8,224.08 1664.7,208.6 1688.8,193.52"];
