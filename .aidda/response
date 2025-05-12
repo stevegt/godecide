@@ -36,7 +36,8 @@ type Node struct {
 	FinRate float64
 	ReRate  float64
 	Due     time.Time
-	Paths   Paths `yaml:",omitempty"`
+	Paths   Paths    `yaml:",omitempty"`
+	Prereqs []string `yaml:",omitempty"`
 }
 
 type Paths map[string]float64
@@ -51,26 +52,26 @@ type Stats struct {
 }
 
 type Ast struct {
-	Name         string
-	Desc         string
-	Repeat       int
-	FinRate      float64
-	ReRate       float64
-	Period       Stats
-	Node         Stats
-	Path         Stats
-	Expected     Stats
-	Start        time.Time
-	End          time.Time
-	Due          time.Time
-	Timeline     fin.Timeline
-	Parent       *Ast
-	Hyperedges   []*Hyperedge
-	CriticalPath bool // marks whether this Ast is on the critical path from its parent
+	Name       string
+	Desc       string
+	Repeat     int
+	FinRate    float64
+	ReRate     float64
+	Period     Stats
+	Node       Stats
+	Path       Stats
+	Expected   Stats
+	Start      time.Time
+	End        time.Time
+	Due        time.Time
+	Timeline   fin.Timeline
+	Critical   bool
+	Hyperedges []*Hyperedge
 }
 
 type Hyperedge struct {
 	Prob     float64
+	Parents  []*Ast
 	Children []*Ast
 }
 
@@ -80,10 +81,6 @@ func FromYAML(buf []byte) (roots []*Ast, err error) {
 	err = yaml.Unmarshal(buf, &nodes)
 	Ck(err)
 	roots = nodes.ToAst()
-	// Perform critical path analysis on all root nodes.
-	for _, root := range roots {
-		root.AnalyzeCriticalPath()
-	}
 	return
 }
 
@@ -96,8 +93,7 @@ func (nodes Nodes) ToAst() (roots []*Ast) {
 	}
 	sort.Strings(rootNames)
 	for _, name := range rootNames {
-		// Pf("ToAst root %s\n", name)
-		root := nodes.toAst(name, nil)
+		root := nodes.toAst(name)
 		roots = append(roots, root)
 	}
 	return
@@ -146,7 +142,7 @@ func dieif(cond bool, args ...interface{}) {
 	os.Exit(1)
 }
 
-func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
+func (nodes Nodes) toAst(name string) (nodeAst *Ast) {
 	node, ok := nodes[name]
 	dieif(!ok, "missing node: %s", name)
 
@@ -165,17 +161,16 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 	repeat = int(math.Max(1, float64(repeat)))
 
 	nodeAst = &Ast{
-		Name:   name,
-		Desc:   node.Desc,
-		Repeat: repeat,
-		Period: Stats{
+		Name:    name,
+		Desc:    node.Desc,
+		Repeat:  repeat,
+		Period:  Stats{
 			Cash:     cash,
 			Duration: time.Duration(days) * 24 * time.Hour,
 		},
 		Due:     node.Due,
 		FinRate: node.FinRate,
 		ReRate:  node.ReRate,
-		Parent:  parent,
 	}
 	nodeAst.Node.Cash = nodeAst.Period.Cash * float64(nodeAst.Repeat)
 	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
@@ -193,44 +188,18 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 		pathProb := node.Paths[pathKey]
 		// split the path key into child names
 		childNames := strings.Split(pathKey, ",")
-		hyperedge := &Hyperedge{Prob: pathProb}
+		hyperedge := &Hyperedge{
+			Prob:    pathProb,
+			Parents: []*Ast{nodeAst},
+		}
 		for _, childName := range childNames {
-			childAst := nodes.toAst(childName, nodeAst)
+			childAst := nodes.toAst(childName)
 			// Each hyperedge contains a slice of children.
-			// Pf("%s -> %s\n", nodeAst.Name, childAst.Name)
 			hyperedge.Children = append(hyperedge.Children, childAst)
 		}
 		nodeAst.Hyperedges = append(nodeAst.Hyperedges, hyperedge)
 	}
-	// spew.Dump(nodeAst)
 	return
-}
-
-// AnalyzeCriticalPath traverses the Ast tree and marks the child with the longest extra duration
-// from the current node as being on the critical path.
-func (a *Ast) AnalyzeCriticalPath() {
-	// First, recursively analyze all children.
-	for _, hedge := range a.Hyperedges {
-		for _, child := range hedge.Children {
-			child.AnalyzeCriticalPath()
-		}
-	}
-	// Determine the critical child based on the longest extra duration.
-	var crit *Ast
-	var maxExtra time.Duration
-	for _, hedge := range a.Hyperedges {
-		for _, child := range hedge.Children {
-			// extra duration from this node to the end of child's path
-			extra := child.Path.Duration - a.Path.Duration
-			if extra > maxExtra {
-				maxExtra = extra
-				crit = child
-			}
-		}
-	}
-	if crit != nil {
-		crit.CriticalPath = true
-	}
 }
 
 // calculate .Path.*
@@ -264,15 +233,6 @@ func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
 		warn("late: %s end %s due %s\n", this.Name, this.End, this.Due)
 		this.Expected.Mirr = math.NaN()
 	}
-
-	/*
-		Pl(this.Name)
-		for _, t := range this.Timeline.Events() {
-			Pf("%v %v\n", t.Date, t.Cash)
-		}
-		Pf("%.2f\n", this.Path.Mirr)
-		Pl()
-	*/
 
 	for _, hedge := range this.Hyperedges {
 		for _, child := range hedge.Children {
@@ -330,7 +290,6 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 
 	count := countNodesPrefixed(graph, a.Name)
 	name := Spf("%s_%d", a.Name, count+1)
-	// Pf("create node %s\n", name)
 	gvparent, err = graph.CreateNode(name)
 	Ck(err)
 
@@ -421,7 +380,6 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	}
 	if includeMirr {
 		headers = append(headers, "mirr")
-		// No mirr in node row.
 		nodeFields = append(nodeFields, "")
 		pastFields = append(pastFields, Spf("%.1f%%", p.Mirr))
 		futureFields = append(futureFields, Spf("%.1f%%", e.Mirr))
@@ -434,7 +392,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	futureRow := Spf("future   | %s", strings.Join(futureFields, " | "))
 
 	// put it all together
-	label := Spf("%s \\n %s \\n %s \\n %s | { {%s} | {%s} | {%s} | {%s}}", name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow, futureRow)
+	label := Spf("%s \\n %s \\n %s \\n {%s | {%s} | {%s} | {%s}}", name, a.Desc, dates, headerRow, nodeRow, pastRow, futureRow)
 	gvparent.SetLabel(label)
 
 	// Create edges for hyperedges.
@@ -445,7 +403,7 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 	// but do not label the group->child edges. Color a child edge red if it is on the critical path.
 	groupCount := 0
 	for _, hedge := range a.Hyperedges {
-		parentNode := gvparent
+		parent := gvparent
 		showProb := true
 		if len(hedge.Children) > 1 {
 			// create a group node
@@ -454,41 +412,32 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 			groupNode, err := graph.CreateNode(groupNodeName)
 			Ck(err)
 			groupNode.SetShape("point")
-			// set size
 			groupNode.SetWidth(.25)
 			groupNode.SetHeight(.25)
-			// set color to black
 			groupNode.SetFillColor("black")
-			parentNode = groupNode
-			// create edge from parent to group node
+			parent = groupNode
 			groupEdge, err := graph.CreateEdge("", gvparent, groupNode)
 			Ck(err)
-			// label the edge with the probability
 			groupEdge.SetLabel(Spf("%.2f", hedge.Prob))
-			// set the pen width
-			groupEdge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
-			// if any child is marked as critical, color the edge red
+			groupEdge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5)*10)
 			for _, child := range hedge.Children {
-				if child.CriticalPath {
+				if child.Critical {
 					groupEdge.SetColor("red")
 					break
 				}
 			}
-			// don't show the probability on the child edges
 			showProb = false
 		}
-		// create edges from parent to children
 		for _, child := range hedge.Children {
 			gvchild, err := child.Dot(graph, loMirr, hiMirr, warn)
 			Ck(err)
-			gvedge, err := graph.CreateEdge("", parentNode, gvchild)
+			gvedge, err := graph.CreateEdge("", parent, gvchild)
 			Ck(err)
 			if showProb {
 				gvedge.SetLabel(Spf("%.2f", hedge.Prob))
 			}
-			// set the pen width
-			gvedge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5) * 10)
-			if child.CriticalPath {
+			gvedge.SetPenWidth(math.Pow(hedge.Prob+0.1, 0.5)*10)
+			if child.Critical {
 				gvedge.SetColor("red")
 			}
 		}
@@ -529,20 +478,21 @@ func getMirrs(as []*Ast) (lo, hi float64) {
 }
 
 func Recalc(roots []*Ast, now time.Time, warn Warn) {
-	// sum up Cash and Duration
 	for _, root := range roots {
 		root.Forward(nil, now, warn)
 	}
 
-	// calculate expected values
 	for _, root := range roots {
 		root.Backward(warn)
+	}
+
+	for _, root := range roots {
+		root.SetCriticalPath()
 	}
 }
 
 func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
 	loMirr, hiMirr := getMirrs(roots)
-	// Pl(loMirr, hiMirr)
 
 	g := graphviz.New()
 	graph, err := g.Graph()
@@ -559,12 +509,10 @@ func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
 		graph.SetRankDir("LR")
 	}
 
-	// Sort the roots based on their name.
 	sort.Slice(roots, func(i, j int) bool {
 		return roots[i].Name < roots[j].Name
 	})
 	for _, root := range roots {
-		// Pf("root %s\n", root.Name)
 		root.Dot(graph, loMirr, hiMirr, warn)
 	}
 
@@ -612,8 +560,6 @@ func LsExamples(fs embed.FS) (out string) {
 	return
 }
 
-// countNodesPrefixed returns the number of nodes with the given name.
-// This is used to create unique node names in the graphviz output.
 func countNodesPrefixed(graph *cgraph.Graph, name string) (n int) {
 	re := regexp.MustCompile(Spf("^%s_[0-9]+$", name))
 	for _, node := range allNodes(graph) {
@@ -624,7 +570,6 @@ func countNodesPrefixed(graph *cgraph.Graph, name string) (n int) {
 	return
 }
 
-// allNodes returns all nodes in the graph.
 func allNodes(graph *cgraph.Graph) (nodes []*cgraph.Node) {
 	node := graph.FirstNode()
 	for node != nil {
@@ -632,6 +577,31 @@ func allNodes(graph *cgraph.Graph) (nodes []*cgraph.Node) {
 		node = graph.NextNode(node)
 	}
 	return
+}
+
+// SetCriticalPath sets the Critical field of the Ast struct to true
+// if the node is on the critical path.  We determine the critical path
+// by looking at the expected days of each of the children of the given
+// node.
+func (this *Ast) SetCriticalPath() {
+	maxDur := time.Duration(0)
+	for _, hedge := range this.Hyperedges {
+		for _, child := range hedge.Children {
+			child.SetCriticalPath()
+		}
+		for _, child := range hedge.Children {
+			if child.Expected.Duration > maxDur {
+				maxDur = child.Expected.Duration
+			}
+		}
+	}
+	for _, hedge := range this.Hyperedges {
+		for _, child := range hedge.Children {
+			if child.Expected.Duration >= maxDur {
+				child.Critical = true
+			}
+		}
+	}
 }
 ```
 EOF_/home/stevegt/lab/godecide/godecide.go

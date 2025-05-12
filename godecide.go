@@ -34,7 +34,8 @@ type Node struct {
 	FinRate float64
 	ReRate  float64
 	Due     time.Time
-	Paths   Paths `yaml:",omitempty"`
+	Paths   Paths    `yaml:",omitempty"`
+	Prereqs []string `yaml:",omitempty"`
 }
 
 type Paths map[string]float64
@@ -62,13 +63,13 @@ type Ast struct {
 	End        time.Time
 	Due        time.Time
 	Timeline   fin.Timeline
-	Parent     *Ast
 	Critical   bool
 	Hyperedges []*Hyperedge
 }
 
 type Hyperedge struct {
 	Prob     float64
+	Parents  []*Ast
 	Children []*Ast
 }
 
@@ -90,8 +91,7 @@ func (nodes Nodes) ToAst() (roots []*Ast) {
 	}
 	sort.Strings(rootNames)
 	for _, name := range rootNames {
-		// Pf("ToAst root %s\n", name)
-		root := nodes.toAst(name, nil)
+		root := nodes.toAst(name)
 		roots = append(roots, root)
 	}
 	return
@@ -140,7 +140,7 @@ func dieif(cond bool, args ...interface{}) {
 	os.Exit(1)
 }
 
-func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
+func (nodes Nodes) toAst(name string) (nodeAst *Ast) {
 	node, ok := nodes[name]
 	dieif(!ok, "missing node: %s", name)
 
@@ -169,7 +169,6 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 		Due:     node.Due,
 		FinRate: node.FinRate,
 		ReRate:  node.ReRate,
-		Parent:  parent,
 	}
 	nodeAst.Node.Cash = nodeAst.Period.Cash * float64(nodeAst.Repeat)
 	nodeAst.Node.Duration = nodeAst.Period.Duration * time.Duration(nodeAst.Repeat)
@@ -187,16 +186,17 @@ func (nodes Nodes) toAst(name string, parent *Ast) (nodeAst *Ast) {
 		pathProb := node.Paths[pathKey]
 		// split the path key into child names
 		childNames := strings.Split(pathKey, ",")
-		hyperedge := &Hyperedge{Prob: pathProb}
+		hyperedge := &Hyperedge{
+			Prob:    pathProb,
+			Parents: []*Ast{nodeAst},
+		}
 		for _, childName := range childNames {
-			childAst := nodes.toAst(childName, nodeAst)
+			childAst := nodes.toAst(childName)
 			// Each hyperedge contains a slice of children.
-			// Pf("%s -> %s\n", nodeAst.Name, childAst.Name)
 			hyperedge.Children = append(hyperedge.Children, childAst)
 		}
 		nodeAst.Hyperedges = append(nodeAst.Hyperedges, hyperedge)
 	}
-	// spew.Dump(nodeAst)
 	return
 }
 
@@ -231,15 +231,6 @@ func (this *Ast) Forward(parent *Ast, now time.Time, warn Warn) {
 		warn("late: %s end %s due %s\n", this.Name, this.End, this.Due)
 		this.Expected.Mirr = math.NaN()
 	}
-
-	/*
-		Pl(this.Name)
-		for _, t := range this.Timeline.Events() {
-			Pf("%v %v\n", t.Date, t.Cash)
-		}
-		Pf("%.2f\n", this.Path.Mirr)
-		Pl()
-	*/
 
 	for _, hedge := range this.Hyperedges {
 		for _, child := range hedge.Children {
@@ -297,7 +288,6 @@ func (a *Ast) Dot(graph *cgraph.Graph, loMirr, hiMirr float64, warn Warn) (gvpar
 
 	count := countNodesPrefixed(graph, a.Name)
 	name := Spf("%s_%d", a.Name, count+1)
-	// Pf("create node %s\n", name)
 	gvparent, err = graph.CreateNode(name)
 	Ck(err)
 
@@ -511,13 +501,10 @@ func Recalc(roots []*Ast, now time.Time, warn Warn) {
 	for _, root := range roots {
 		root.SetCriticalPath()
 	}
-
 }
 
 func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
-
 	loMirr, hiMirr := getMirrs(roots)
-	// Pl(loMirr, hiMirr)
 
 	g := graphviz.New()
 	graph, err := g.Graph()
@@ -539,7 +526,6 @@ func ToDot(roots []*Ast, warn Warn, tb bool) (buf []byte) {
 		return roots[i].Name < roots[j].Name
 	})
 	for _, root := range roots {
-		// Pf("root %s\n", root.Name)
 		root.Dot(graph, loMirr, hiMirr, warn)
 	}
 

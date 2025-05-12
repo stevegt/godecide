@@ -1,12 +1,36 @@
-move critical path analysis to Ast
+move parent to hyperedge
 
-Instead of doing the critical path analysis in the Dot() function, we should
-move it to the Ast struct. This will allow us to do the critical path analysis
-regardless of the output format. 
+Move the Parent field from the Ast struct to the Hyperedge struct, and
+make it a slice of pointers to Ast structs. This allows for multiple
+parents for each node, which is useful for representing more complex
+graph structures like PERT charts.
 
-Modify the Ast struct to include a CriticalPath boolean, add a method
-that does the critical path analysis, call that method after loading
-from yaml, and then refer to the CriticalPath boolean in the Dot() function.
+For example:
+
+type Ast struct {
+	Name       string
+	Desc       string
+	Repeat     int
+	FinRate    float64
+	ReRate     float64
+	Period     Stats
+	Node       Stats
+	Path       Stats
+	Expected   Stats
+	Start      time.Time
+	End        time.Time
+	Due        time.Time
+	Timeline   fin.Timeline
+	Critical   bool
+	Hyperedges []*Hyperedge
+}
+
+type Hyperedge struct {
+	Prob     float64
+	Parents  []*Ast
+	Children []*Ast
+}
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

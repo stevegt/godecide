@@ -36,3 +36,16 @@ frontend:
 prototype:
   desc: "Develop an integrated prototype solution for rapid validation"
   days: 20
+
+testing:
+  desc: "Conduct testing and quality assurance on all components"
+  days: 5
+  paths:
+    deployment: 1.0
+  prereqs:
+    - backend,frontend
+    - prototype
+
+deployment:
+  desc: "Deploy the final product to production environment"
+  days: 2
