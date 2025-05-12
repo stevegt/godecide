@@ -29,7 +29,7 @@ func testWarn(t *testing.T) Warn {
 	return func(args ...interface{}) {
 		// If multiple arguments are passed, assume the first is a format string.
 		if len(args) > 1 {
-			t.Logf(fmt.Sprint(args...))
+			t.Logf(args[0].(string), args[1:]...)
 		} else if len(args) == 1 {
 			t.Log(fmt.Sprint(args[0]))
 		}

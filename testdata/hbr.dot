@@ -35,7 +35,8 @@ digraph "" {
 		shape=record,
 		style=filled,
 		width=4.0158];
-	dp1_1 -> big_1	 [label=0.50,
+	dp1_1 -> big_1	 [color=red,
+		label=0.50,
 		lp="272.31,698.5",
 		penwidth=7.745966692414834,
 		pos="e,302.47,698.1 242.46,673.62 258.96,680.35 276.07,687.33 293.05,694.26"];
@@ -52,7 +53,8 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=4.0158];
-	dp1_1 -> small_1	 [label=0.50,
+	dp1_1 -> small_1	 [color=red,
+		label=0.50,
 		lp="272.31,543.5",
 		penwidth=7.745966692414834,
 		pos="e,302.47,512.27 242.46,549.26 259.11,538.99 276.39,528.34 293.52,517.78"];
@@ -87,7 +89,8 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=3.9511];
-	big_1 -> "big-highinit_1"	 [label=0.10,
+	big_1 -> "big-highinit_1"	 [color=red,
+		label=0.10,
 		lp="621.95,801.5",
 		penwidth=4.47213595499958,
 		pos="e,654.39,797.41 591.87,785.25 609.14,788.61 626.82,792.05 644.2,795.43"];
@@ -104,7 +107,8 @@ past     | -1,300,000 | 0 days | -1,300,000 | -100.0%} | {future   | 2,344,400 |
 		shape=record,
 		style=filled,
 		width=4.0158];
-	big_1 -> "big-lowavg_1"	 [label=0.30,
+	big_1 -> "big-lowavg_1"	 [color=red,
+		label=0.30,
 		lp="621.95,702.5",
 		penwidth=6.324555320336759,
 		pos="e,652.14,679.11 591.87,702.04 608.67,695.65 625.85,689.12 642.77,682.68"];
@@ -139,7 +143,8 @@ past     | -200,000 | 3650 days | -823,230 | 6.5%} | {future   | -200,000 | 3650
 		shape=record,
 		style=filled,
 		width=3.7241];
-	small_1 -> "small-highinit_1"	 [label=0.70,
+	small_1 -> "small-highinit_1"	 [color=red,
+		label=0.70,
 		lp="621.95,431.5",
 		penwidth=8.94427190999916,
 		pos="e,662.51,423.1 591.87,423.1 611.87,423.1 632.43,423.1 652.43,423.1"];
@@ -174,7 +179,8 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.5297];
-	"small-highinit_1" -> dp2_1	 [label=1.00,
+	"small-highinit_1" -> dp2_1	 [color=red,
+		label=1.00,
 		lp="971.59,431.5",
 		penwidth=10.488088481701517,
 		pos="e,1015.8,423.1 931.09,423.1 955.56,423.1 981.11,423.1 1005.7,423.1"];
@@ -191,7 +197,8 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=4.0158];
-	dp2_1 -> expand_1	 [label=0.50,
+	dp2_1 -> expand_1	 [color=red,
+		label=0.50,
 		lp="1314.2,486.5",
 		penwidth=7.745966692414834,
 		pos="e,1344.4,484.21 1270.3,461.75 1291.2,468.09 1313.1,474.72 1334.5,481.23"];
@@ -208,7 +215,8 @@ past     | 2,700,000 | 3650 days | 1,158,561 | 17.2%} | {future   | 2,700,000 | 
 		shape=record,
 		style=filled,
 		width=3.5297];
-	dp2_1 -> nochange_1	 [label=0.50,
+	dp2_1 -> nochange_1	 [color=red,
+		label=0.50,
 		lp="1314.2,382.5",
 		penwidth=7.745966692414834,
 		pos="e,1361.9,356.67 1270.3,384.45 1296.9,376.38 1325.1,367.83 1352,359.66"];
@@ -243,7 +251,8 @@ days | 0 | } | {past     | 3,000,000 | 3650 days | 750,146 | 12.4%} | {future   
 		shape=record,
 		style=filled,
 		width=4.0158];
-	expand_1 -> "expand-lowavg_1"	 [label=0.14,
+	expand_1 -> "expand-lowavg_1"	 [color=red,
+		label=0.14,
 		lp="1663.9,536.5",
 		penwidth=4.898979485566357,
 		pos="e,1694.1,528.1 1633.8,528.1 1650.3,528.1 1667.1,528.1 1683.7,528.1"];
@@ -279,7 +288,8 @@ node     | 2,400,000 | 2920 days | 0 | } | {past     | 2,000,000 | 3650 days | 8
 		shape=record,
 		style=filled,
 		width=3.9185];
-	nochange_1 -> "nochange-lowavg_1"	 [label=0.14,
+	nochange_1 -> "nochange-lowavg_1"	 [color=red,
+		label=0.14,
 		lp="1663.9,224.5",
 		penwidth=4.898979485566357,
 		pos="e,1697.4,188.21 1616.3,238.78 1639.8,224.08 1664.7,208.6 1688.8,193.52"];

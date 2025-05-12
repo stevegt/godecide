@@ -87,7 +87,8 @@ past     | -50,000 | 730 days | -43,392 | -100.0%} | {future   | 5,950,000 | 153
 		shape=record,
 		style=filled,
 		width=3.8213];
-	business_1 -> fail_1	 [label=0.90,
+	business_1 -> fail_1	 [color=red,
+		label=0.90,
 		lp="614.95,803.1",
 		penwidth=10,
 		pos="e,658.92,816.46 584.81,773.85 606.23,786.16 628.42,798.92 650.03,811.34"];
@@ -104,8 +105,7 @@ past     | -50,000 | 730 days | -43,392 | -100.0%} | {future   | 5,950,000 | 153
 		shape=record,
 		style=filled,
 		width=3.9185];
-	business_1 -> grow_1	 [color=red,
-		label=0.10,
+	business_1 -> grow_1	 [label=0.10,
 		lp="614.95,703.1",
 		penwidth=4.47213595499958,
 		pos="e,655.47,694.7 584.81,694.7 604.68,694.7 625.21,694.7 645.32,694.7"];
@@ -157,7 +157,8 @@ past     | -110,000 | 1640 days | -82,330 | -100.0%} | {future   | 5,890,000 | 1
 		shape=record,
 		style=filled,
 		width=3.8213];
-	campus_1 -> covid_1	 [label=0.20,
+	campus_1 -> covid_1	 [color=red,
+		label=0.20,
 		lp="1352.7,1211.1",
 		penwidth=5.477225575051662,
 		pos="e,1396.8,1222.7 1307,1173.7 1333.4,1188.1 1361.2,1203.2 1387.8,1217.8"];
@@ -174,8 +175,7 @@ past     | 5,890,000 | 16240 days | 874,435 | 18.4%} | {future   | 5,890,000 | 1
 		shape=record,
 		style=filled,
 		width=4.2102];
-	campus_1 -> fine_2	 [color=red,
-		label=0.80,
+	campus_1 -> fine_2	 [label=0.80,
 		lp="1352.7,1105.1",
 		penwidth=9.486832980505138,
 		pos="e,1382.7,1096.7 1307,1096.7 1328.5,1096.7 1350.8,1096.7 1372.7,1096.7"];
@@ -263,7 +263,8 @@ past     | 6,090,000 | 16060 days | 1,065,831 | 25.1%} | {future   | 6,090,000 |
 		shape=record,
 		style=filled,
 		width=3.7241];
-	campus_2 -> covid_2	 [label=0.20,
+	campus_2 -> covid_2	 [color=red,
+		label=0.20,
 		lp="614.95,473.1",
 		penwidth=5.477225575051662,
 		pos="e,662.64,471.83 584.81,459.15 607.12,462.78 630.27,466.56 652.72,470.22"];
@@ -280,8 +281,7 @@ past     | 5,950,000 | 15330 days | 1,169,815 | 21.5%} | {future   | 5,950,000 |
 		shape=record,
 		style=filled,
 		width=4.2102];
-	campus_2 -> fine_6	 [color=red,
-		label=0.80,
+	campus_2 -> fine_6	 [label=0.80,
 		lp="614.95,377.1",
 		penwidth=9.486832980505138,
 		pos="e,645.07,355.18 584.81,379.99 601.5,373.12 618.66,366.05 635.65,359.06"];
